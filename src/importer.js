@@ -57,30 +57,39 @@ function pairChordRow(chords,lyric){
  });
  return {text,chords:anchors.sort((a,b)=>a.index-b.index)};
 }
-export function extractPositionedSong(words,{preserveColumns=true}={}){
- const all=groupRows(words);if(!all.length)return [];
- // Two-column printed pages require splitting before pairing chord rows.
- const widths=all.map(r=>r.maxX-r.x),fullW=Math.max(...all.map(r=>r.maxX))-Math.min(...all.map(r=>r.x));
- const splitAt=Math.min(...all.map(r=>r.x))+fullW/2;
- const left=all.filter(r=>r.maxX<=splitAt+fullW*.045);
- const right=all.filter(r=>r.x>=splitAt-fullW*.045);
- let sections=[all];
- const isTwoCol=preserveColumns&&left.length>=5&&right.length>=5&&left.length+right.length>=all.length*.83;
- if(isTwoCol)sections=[left,right];
+export function extractPositionedSong(words,{preserveColumns=false}={}){
+ const filtered=words.filter(w=>w&&String(w.text||"").trim()&&Number.isFinite(w.x)&&Number.isFinite(w.y)&&Number.isFinite(w.width)&&Number.isFinite(w.height));
+ if(!filtered.length)return [];
+ // Scan pages separately and process columns independently before merging
+ // rows; otherwise a chord from the right column can attach to a lyric
+ // in the left column that happens to be at the same height.
+ const pages=[...new Set(filtered.map(w=>w.page??1))].sort((a,b)=>a-b);
  const result=[];
- for(const part of sections){
-  for(let i=0;i<part.length;i++){
-   const row=part[i];if(row.isChord){
-    const following=part[i+1];
-    const dy=following?.center-row.center;
-    if(following&&!following.isChord&&dy>0&&dy<row.height*3.7){
-     result.push(pairChordRow(row,following));i++;continue;
+ for(const page of pages){
+  const pageWords=filtered.filter(w=>(w.page??1)===page);
+  const minX=Math.min(...pageWords.map(w=>w.x));
+  const maxX=Math.max(...pageWords.map(w=>w.x+w.width));
+  const splitAt=(minX+maxX)/2;
+  const left=pageWords.filter(w=>w.x+w.width/2<splitAt);
+  const right=pageWords.filter(w=>w.x+w.width/2>=splitAt);
+  const countRows=(items)=>new Set(items.map(w=>Math.round(w.y/12))).size;
+  const twoColumns=preserveColumns&&left.length>=15&&right.length>=15&&countRows(left)>=5&&countRows(right)>=5;
+  const sections=twoColumns?[left,right]:[pageWords];
+  for(const section of sections){
+   const rows=groupRows(section);
+   for(let i=0;i<rows.length;i++){
+    const row=rows[i];
+    if(row.isChord){
+     const following=rows[i+1];
+     const dy=following?.center-row.center;
+     if(following&&!following.isChord&&dy>0&&dy<row.height*3.7){
+      result.push(pairChordRow(row,following));i++;continue;
+     }
+     result.push({text:"",chords:row.candidates.map(w=>({index:0,symbol:normalizeChord(w.text)})),needsReview:true});continue;
     }
-    // Standalone chord line: no fake lyric row. Flag for user review.
-    result.push({text:"",chords:row.candidates.map(w=>({index:0,symbol:normalizeChord(w.text)})),needsReview:true});continue;
+    const {text}=rowToLyric(row);
+    result.push({text,chords:[]});
    }
-   const {text}=rowToLyric(row);
-   result.push({text,chords:[]});
   }
  }
  return result;
