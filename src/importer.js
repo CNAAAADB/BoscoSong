@@ -27,7 +27,7 @@ function groupRows(words){
   row.ratio=row.words.reduce((t,w)=>t+strength(w),0)/row.words.length;
   // Require a strong all-chord pattern, with strong chord markers or
   // spacing/position evidence; avoid treating "la mi" within prose as notes.
-  row.isChord=row.ratio>=.78&&row.words.length<=16;
+  row.isChord=row.candidates.length===row.words.length&&row.words.length<=16&&(row.ratio>=.62||row.words.some(w=>/[0-9#b]/.test(w.text)));
   return row;
  });
 }
