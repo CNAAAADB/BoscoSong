@@ -16,7 +16,7 @@ const FLAT={Db:"C#",Eb:"D#",Gb:"F#",Ab:"G#",Bb:"A#",Cb:"B",Fb:"E"};
 const LATIN={Do:"C",Re:"D",Mi:"E",Fa:"F",Sol:"G",La:"A",Si:"B"};
 function normalizeRoot(root){return FLAT[root]||LATIN[root]||root;}
 function shiftRoot(root,steps){const n=normalizeRoot(root);const pos=NOTES.indexOf(n);return pos<0?root:NOTES[(pos+steps%12+12)%12];}
-function isChord(text){return /^(?:Do|Re|Mi|Fa|Sol|La|Si|[A-G])(?:#|b)?(?:m|maj|min|dim|aug|sus|add|M|°|ø|\\+|-|[0-9]|\\/|\\(|\\)|#|b)*$/i.test(text)&&text.length<=22;}
+function isChord(text){return /^(?:DO|RE|MI|FA|SOL|LA|SI|[A-G])(?:#|b)?[A-Za-z0-9+#b°ø()/-]*$/i.test(text)&&text.length<=24;}
 function parseChordsText(input){
  const rows=input.replace(/\r/g,"").split("\n"),result=[];
  for(let i=0;i<rows.length;i++){
