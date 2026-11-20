@@ -82,10 +82,16 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
      bitmap.close();
      const worker=await tesseract.createWorker("spa+eng");
      try{
-       const recognized=await worker.recognize(canvas);
-       const toWords=(r)=>Array.isArray(r.data.words)?r.data.words.filter(w=>Number(w.confidence??w.conf??100)>30).map(w=>({
-         text:w.text,x:w.bbox.x0,y:w.bbox.y0,width:w.bbox.x1-w.bbox.x0,height:w.bbox.y1-w.bbox.y0
-       })):[];
+       const recognized=await worker.recognize(canvas,{}, {text:true,blocks:true});
+       const toWords=(r)=>{
+         const blocks=r.data?.blocks;
+         const nested=Array.isArray(blocks)?blocks.flatMap(block=>(block.paragraphs||[]).flatMap(p=>(p.lines||[]).flatMap(line=>line.words||[]))):[];
+         const words=Array.isArray(r.data?.words)?r.data.words:nested;
+         return words.filter(w=>w.bbox&&Number(w.confidence??w.conf??100)>25).map(w=>({
+           text:w.text||"",x:w.bbox.x0,y:w.bbox.y0,
+           width:w.bbox.x1-w.bbox.x0,height:w.bbox.y1-w.bbox.y0
+         }));
+       };
        lines=extractPositionedSong(toWords(recognized));
        const chordCount=lines.reduce((n,l)=>n+(l.chords||[]).length,0);
        if(chordCount===0){
