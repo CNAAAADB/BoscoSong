@@ -12,6 +12,26 @@ Prototipo web (React + Vite) del cancionero del coro, preparado para GitHub Page
 6. Pulsa **Editar** y luego en cualquier carácter para colocar un acorde. Pulsa sobre un acorde existente para modificarlo o quitarlo.
 7. La canción y sus cambios se guardan en **IndexedDB del navegador**. No hay sincronización entre dispositivos.
 
+## Diseño y sesiones (prototipo)
+
+- **Montserrat** es la única familia tipográfica; colores oficiales `#252b57`, `#d0a73f` y `#e6d7aa`.
+- La lista lateral de canciones se desplaza independientemente del visor.
+- Las sesiones permiten buscar, crear, ordenar canciones y **publicar**. Una vez publicadas, el formulario no permite cambiarlas.
+- Se puede compartir el **enlace completo** de una sesión o exportar/importar JSON para abrirla en otro dispositivo. Se puede buscar un código corto solo entre las sesiones cargadas en ese navegador.
+- Los enlaces completos guardan la lista de IDs de canciones, **no el contenido completo del cancionero**; cada dispositivo debe tener importadas las canciones correspondientes.
+- Sin un backend no existe un catálogo global de sesiones creadas por todos los visitantes, ni almacenamiento compartido de nuevos PDF, imágenes o JSON. **No afirmar sincronización global mientras esté en GitHub Pages estático**.
+- Las canciones se guardan en IndexedDB local y las sesiones se guardan como JSON en localStorage del navegador. Para copias de seguridad, exportar el JSON.
+
+## OCR y calidad de acordes
+
+El importador PDF/imagen intenta reconocer líneas de acordes por separado, usando coordenadas de cajas de palabras para situarlos sobre los caracteres de la letra. Incluye preprocesamiento de imagen y segunda lectura cuando no se detectan acordes. **Es una aproximación y requiere revisión humana** de los acordes y la sílaba exacta; no se garantiza OCR perfecto.
+
+Hay pruebas de regresión de música y OCR con:
+
+```bash
+npm test
+```
+
 ## Revisión de la importación
 
 Las líneas y los acordes se estimaron mediante las coordenadas tipográficas del PDF original, teniendo en cuenta el diseño en dos columnas. **No se ha revisado musicalmente cada canción**, por lo que los anclajes, las transposiciones especiales, el texto y los títulos deben verificarse frente al PDF antes de interpretarlos en una celebración.
