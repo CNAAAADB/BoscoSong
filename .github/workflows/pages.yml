@@ -24,6 +24,8 @@ jobs:
         run: cp index.source.html index.html
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Test music and OCR logic
+        run: npm test
       - name: Compile React app
         run: npm run build
       - name: Publish compiled files to repository root
