@@ -4,22 +4,41 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: boscosong-pages
   cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - run: npm run build
+      - name: Restore source HTML for Vite
+        run: cp index.source.html index.html
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile React app
+        run: npm run build
+      - name: Publish compiled files to repository root
+        run: |
+          rm -rf assets
+          cp dist/index.html index.html
+          cp -R dist/assets assets
+          touch .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A index.html assets .nojekyll
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: publish prebuilt BoscoSong for branch-based Pages [skip ci]"
+            git push origin HEAD:main
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
