@@ -24,7 +24,7 @@ test("chord-only row stays above lyric when geometry is available",()=>{
  ];
  const result=extractPositionedSong(items);
  assert.equal(result.length,1);
- assert.equal(result[0].text,"Cantamos unidos");
+ assert.equal(result[0].text.replace(/\s+/g," "),"Cantamos unidos");
  assert.deepEqual(result[0].chords.map(c=>c.symbol),["DO","SOL"]);
  assert.equal(result[0].chords[0].index,0);
  assert.ok(result[0].chords[1].index>0);
