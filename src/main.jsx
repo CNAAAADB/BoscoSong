@@ -56,7 +56,7 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
        const content=await page.getTextContent();
        for(const item of content.items){
          if(!item.str?.trim())continue;
-         const tokens=[...item.str.matchAll(/\\S+/g)];
+         const tokens=[...item.str.matchAll(/\S+/g)];
          const charWidth=(item.width||0)/Math.max(1,item.str.length);
          for(const token of tokens)words.push({
            text:token[0],x:item.transform[4]+(token.index||0)*charWidth,
@@ -98,8 +98,8 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
        }
      }finally{await worker.terminate();}
    }else lines=parseBracketedText(await file.text());
-   setDraft(d=>({...d,title:d.title||file.name.replace(/\\.[^.]+$/,""),lines,reviewStatus:"pendiente"}));
-   setRaw(lines.map(l=>{let t=l.text;for(const c of [...(l.chords||[])].sort((a,b)=>b.index-a.index))t=t.slice(0,c.index)+"["+c.symbol+"]"+t.slice(c.index);return t}).join("\\n"));
+   setDraft(d=>({...d,title:d.title||file.name.replace(/\.[^.]+$/,""),lines,reviewStatus:"pendiente"}));
+   setRaw(lines.map(l=>{let t=l.text;for(const c of [...(l.chords||[])].sort((a,b)=>b.index-a.index))t=t.slice(0,c.index)+"["+c.symbol+"]"+t.slice(c.index);return t}).join("\n"));
    if(!lines.length)setError("No se detectó contenido legible en este archivo.");
   }catch(e){setError("No se pudo importar: "+e.message);}
   finally{setBusy("");if(fileRef.current)fileRef.current.value="";}
