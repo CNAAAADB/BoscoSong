@@ -1,30 +1,50 @@
 # BoscoSong
 
-Prototipo de cancionero para coros y músicos.
+Prototipo web (React + Vite) del cancionero del coro, preparado para GitHub Pages. No requiere AWS, base de datos remota, roles ni cuentas.
 
-**Estado:** desarrollo inicial. Web estática con React + Vite, desplegada mediante GitHub Pages. Sin usuarios ni backend; las canciones se almacenan solo en el navegador durante las pruebas.
+## Prueba con el cancionero CJAtocha 2024
 
-## Objetivo prioritario
+1. Descarga el JSON indexado generado a partir del PDF de 432 páginas.
+2. Abre la web de prueba de BoscoSong.
+3. En **Canciones**, pulsa **Importar cancionero JSON** y selecciona el archivo descargado.
+4. Filtra por sección (por ejemplo, **Cantos de entrada** o **Cantos de comunión**) y busca por título o fragmento de letra.
+5. Abre una canción, activa o desactiva **Acordes**, utiliza **-** o **+** para transportar por semitonos y revisa el resultado visual.
+6. Pulsa **Editar** y luego en cualquier carácter para colocar un acorde. Pulsa sobre un acorde existente para modificarlo o quitarlo.
+7. La canción y sus cambios se guardan en **IndexedDB del navegador**. No hay sincronización entre dispositivos.
 
-Importar PDFs e imágenes y conservar la posición del acorde en la letra. La detección automática requiere revisión humana, especialmente con escaneos, fuentes proporcionales y sílabas complejas.
+## Revisión de la importación
 
-## Ejecución
+Las líneas y los acordes se estimaron mediante las coordenadas tipográficas del PDF original, teniendo en cuenta el diseño en dos columnas. **No se ha revisado musicalmente cada canción**, por lo que los anclajes, las transposiciones especiales, el texto y los títulos deben verificarse frente al PDF antes de interpretarlos en una celebración.
+
+La etiqueta `tags` guarda el nombre original de la sección del documento; `sourcePages` identifica las páginas PDF de referencia. El campo `reviewStatus` distingue `pendiente` (texto extraído sin revisar) y `sin contenido` (referencia detectada solo en el índice).
+
+Las grafías españolas mantienen la distinción mayúscula/menor: `LA` (La mayor) y `la` (La menor). `+7` aislado no permite inferir por sí solo la raíz del acorde y requiere revisión.
+
+### Alcance actual
+
+- Visualización de letras y acordes, búsqueda y filtro por sección.
+- Guía básica de notas armónicas al piano (no es una partitura ni una digitación fija).
+- Transporte cromático en semitonos.
+- Sesiones locales ordenadas y duplicables.
+- Autoscroll aproximado controlado con BPM y velocidad: **no sigue un mapa temporal por sílabas**.
+- Importación individual de PDF con texto, imágenes y TXT en el editor.
+- Importación masiva del cancionero mediante JSON, conservado localmente.
+
+No hay todavía sesiones multiusuario, sincronización, reconocimiento musical de partituras ni transporte de pentagramas.
+
+## Desarrollo local
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Despliegue
+## GitHub Pages
 
-En GitHub: Settings > Pages > Build and deployment > Source: **GitHub Actions**. Cada push a `main` ejecuta `.github/workflows/pages.yml`.
+El proyecto está configurado con la ruta Vite `/BoscoSong/` y un workflow `.github/workflows/pages.yml`. En **Settings > Pages > Build and deployment**, seleccionar **GitHub Actions** como Source para evitar que un despliegue Jekyll del origen de rama reemplace el construido con React.
 
-## Limitaciones deliberadas del prototipo
+URL prevista: https://cnaaaadb.github.io/BoscoSong/
 
-- No hay cuentas ni sesiones compartidas entre dispositivos.
-- Los datos se guardan en localStorage, sin sincronización ni copias de seguridad.
-- La importación puede requerir corregir manualmente las posiciones de los acordes.
-- El desplazamiento sigue una velocidad aproximada ligada al BPM; el documento de origen no contiene tiempos reales por sílaba.
-- Las partituras rasterizadas no pueden transportarse de forma fiable sin reconstruir la notación. No se promete esa función en esta versión.
+## Datos y privacidad
 
-No publicar material protegido por derechos de autor sin autorización.
+El PDF del cancionero **no se incluye en este repositorio**. La importación desde JSON se hace en el navegador, de modo que las canciones no se publican automáticamente en GitHub Pages. Antes de compartir públicamente el material, revisar derechos de reproducción y distribución. Evitar borrar los datos del navegador sin exportar una copia.
