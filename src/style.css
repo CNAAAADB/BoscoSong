@@ -82,3 +82,46 @@ body{background:var(--canvas);color:var(--text)}
  .sessionSongLink{gap:8px}
  .sessionSongLink>span:last-child{white-space:normal;text-align:right}
 }
+
+/* Official BoscoSong palette: night blue, gold and parchment */
+:root{
+ --brand:#252b57;
+ --brand-darker:#1a2043;
+ --surface:#ffffff;
+ --canvas:#f8f5eb;
+ --muted:#666b80;
+ --border:#e6d7aa;
+ --text:#252b57;
+ --gold:#d0a73f;
+ --parchment:#e6d7aa;
+}
+html,body,#root{background:var(--canvas);color:var(--text)}
+body,.shell{background:var(--canvas);color:var(--text)}
+header,.layout aside,.playback,.editPanel{background:#fffdf8;border-color:var(--border)}
+.brand,.brand strong,.readerHead h1,h1,h2,h3{color:#252b57}
+.brandIcon,.primary,.play{background:#252b57;border-color:#252b57;color:#fff}
+.primary:hover,.play:hover{background:#1a2043;border-color:#1a2043}
+.brand small,.hint,.sessionsLimit{color:#6f7183}
+.eyebrow{color:#967122}
+nav button{color:#252b57}
+nav button.current,nav button:hover,.songItem.selected,.songItem:hover,.sessionSongLink:hover{background:#f4ebd3;color:#252b57}
+.iconButton,.secondary,.subtle,.actions button,.transpose button,.sessionRow button{background:#fffaf0;color:#252b57;border-color:#e6d7aa}
+.iconButton:hover,.secondary:hover,.subtle:hover{background:#f3e8c7}
+.search,.formGrid input,.formGrid select,.sessionsGrid input,.sessionsGrid select,.sessionUtilGrid input:not([type=file]),.createSession input,.editPanel textarea{background:#fffdf8;border-color:#e6d7aa;color:#252b57}
+.search input,.search select{color:#252b57}
+.toolbar{background:#f6f0e1;border-color:#e6d7aa}
+.toolbarSeparator{border-color:#e0cf9f}
+.switch input,.playback input{accent-color:#d0a73f}
+.chord{color:#9a7116}
+.chord:hover{color:#252b57}
+.editableChar:hover{background:#f2e3b8;color:#252b57}
+.reviewNotice{background:#fff4d9;border-color:#d0a73f;color:#705716}
+.importBox{background:#f6f0df;border-color:#d0a73f;color:#252b57}
+.importBox p,.editTitle p,.sessionsIntro p{color:#60657d}
+.sessionSongLink,.sessionRow,.sessionListPanel,.sessionOrder,.sessionCandidates{border-color:#e6d7aa}
+.sessionSongLink{background:#fffdf8;color:#252b57}
+.notice{background:#f7eed8;color:#252b57}
+.pianoWrap{background:#fffdf8;border-color:#e6d7aa}
+.whiteKey.activeKey{background:#e6d7aa}
+.blackKey.activeBlack{background:#d0a73f}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline-color:#d0a73f}
