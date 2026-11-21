@@ -1,5 +1,5 @@
 {
-  "apiBase": "",
-  "cognitoDomain": "",
-  "clientId": ""
+  "apiBase": "https://16vmw9xqri.execute-api.eu-west-1.amazonaws.com",
+  "cognitoDomain": "boscosong-909186483504-eu-west-1.auth.eu-west-1.amazoncognito.com",
+  "clientId": "16j3qgkn9nc0rnm61ln0tb8h5m"
 }
