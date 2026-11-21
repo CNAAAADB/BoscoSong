@@ -26,6 +26,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Test music and OCR logic
         run: npm test
+      - name: Check Lambda Python syntax
+        run: python3 -m py_compile backend/api/app.py
       - name: Compile React app
         run: npm run build
       - name: Publish compiled files to repository root
