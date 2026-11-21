@@ -1,4 +1,25 @@
-# BoscoSong backend (AWS SAM)
+# BoscoSong AWS · Estado de producción piloto
+
+**Desplegado en eu-west-1:** pila CloudFormation `BoscoSongPilot`, Cognito, Lambda, API Gateway HTTP y tabla DynamoDB PAY_PER_REQUEST. El frontend de GitHub Pages ya utiliza la API real mediante `public/config.json`.
+
+- **Plantilla autoritativa del despliegue real:** `backend/deployed-stack.json`.
+- **Importante:** el archivo `backend/template.yaml` es un borrador SAM anterior; no lo ejecutes sobre la pila `BoscoSongPilot`, ya que la sustituirías por una topología diferente.
+- **Inicio de sesión:** Cognito permite únicamente usuarios creados/invitados por un administrador. La pertenencia al grupo `editors` permite publicar, editar o borrar canciones. Actualmente no se ha invitado ninguna cuenta.
+- **Límites de coste:** API HTTP limitada a 6 solicitudes por segundo y ráfagas de 12. Lambda 128 MB y DynamoDB bajo demanda, sin instancias permanentes. Vigilar uso y presupuestos de AWS.
+- **Comprobaciones realizadas:** GET /changes => 200; invocación sin grupo de edición => 403; escritura y lectura temporales => 200 y limpieza posterior.
+- **Ámbito actual:** canciones públicas y cambios compartidos; las sesiones siguen siendo locales o compartidas por enlace completo, no hay todavía un índice global de sesiones.
+
+## Invitación del primer editor
+
+Desde la consola AWS en **Cognito → User pools → BoscoSong-Editors-Pilot**, crea/invita al usuario con su correo real y añádelo al grupo `editors`. No introduzcas contraseñas ni secretos en GitHub ni en el chat. La primera entrada utiliza la interfaz de Cognito y el cambio de contraseña inicial.
+
+## Mantenimiento
+
+Los cambios de infraestructura deben hacerse actualizando `backend/deployed-stack.json` y la pila CloudFormation correspondiente. No edites los recursos por separado, para evitar discrepancias con la plantilla declarativa.
+
+---
+
+# Referencia histórica del planteamiento AWS SAM
 
 The static GitHub Pages site is publicly readable. The existing 1,419-song catalog is distributed as `public/catalog/*.json`. Only **approved Cognito editors** can publish, edit or delete songs, and every change is checked server-side.
 
