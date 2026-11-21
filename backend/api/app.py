@@ -91,6 +91,9 @@ def parse_song(data, id_override=None):
         "tempo": int(tempo),
         "lines": clean_lines,
         "reviewStatus": str(data.get("reviewStatus", "pendiente"))[:32],
+        "section": str(data.get("section", ""))[:80],
+        "sourcePages": [int(page) for page in (data.get("sourcePages") or [])[:30] if isinstance(page, int) and not isinstance(page, bool) and 0 < page <= 100000],
+        "number": int(data.get("number", 0)) if isinstance(data.get("number"), int) and not isinstance(data.get("number"), bool) else 0,
     }
 
 
