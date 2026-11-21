@@ -56,10 +56,43 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
  const song=songs.find(s=>s.id===selected);const sections=useMemo(()=>[...new Set(songs.flatMap(s=>s.tags||[]))].sort((a,b)=>a.localeCompare(b,"es")),[songs]);const found=useMemo(()=>songs.filter(s=>(sectionFilter==="Todas"||(s.tags||[]).includes(sectionFilter))&&(s.title+" "+(s.lines||[]).map(l=>l.text).join(" ")+" "+(s.tags||[]).join(" ")).toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es"))),[songs,query,sectionFilter]);
  useEffect(()=>{if(song)setTempo(song.tempo||76)},[selected]);
  useEffect(()=>{if(!playing)return;let frame,last;const tick=t=>{if(last&&scrollRef.current)scrollRef.current.scrollTop+=(t-last)/1000*(tempo/60)*scrollRate*12;last=t;frame=requestAnimationFrame(tick)};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame)},[playing,tempo,scrollRate]);
- async function importCatalog(file){if(!file)return;setBusy("Cargando cancionero…");setError("");try{const data=JSON.parse(await file.text());const incoming=Array.isArray(data)?data:data.songs;if(!Array.isArray(incoming)||!incoming.length)throw new Error("El archivo no contiene una lista de canciones.");const clean=incoming.filter(s=>typeof s.title==="string"&&Array.isArray(s.lines)).map(s=>({...s,id:String(s.id||makeId()),category:s.category||"Misa",tags:Array.isArray(s.tags)?s.tags:[],lines:s.lines.map(l=>({text:String(l.text||""),chords:Array.isArray(l.chords)?l.chords.filter(c=>Number.isFinite(c.index)&&typeof c.symbol==="string").map(c=>({index:Math.max(0,Math.min(c.index,String(l.text||"").length)),symbol:c.symbol})):[]}))}));if(!clean.length)throw new Error("Ninguna canción tiene un formato válido.");setSongs(previous=>{const ids=new Set(clean.map(s=>s.id));return [...clean,...previous.filter(s=>!ids.has(s.id))]});setSelected(clean[0].id);setSectionFilter("Todas");setTab("songs");alert("Importadas "+clean.length+" canciones. Revisa la alineación de los acordes antes de utilizarlas.");}catch(e){setError("No se pudo importar el cancionero: "+e.message);alert("No se pudo importar el cancionero: "+e.message)}finally{setBusy("")}}
- function startNew(){setDraft({id:makeId(),title:"",category:"Misa",tags:[],tempo:76,lines:[]});setRaw("");setError("");setTab("edit");}
- function editSong(s){setDraft(structuredClone(s));setRaw(s.lines.map(l=>{let t=l.text;for(const c of [...l.chords].sort((a,b)=>b.index-a.index))t=t.slice(0,c.index)+"["+c.symbol+"]"+t.slice(c.index);return t}).join("\n"));setTab("edit");}
- function saveDraft(){if(!draft?.title.trim()){setError("Escribe un título para guardar.");return;}const saved={...draft,title:draft.title.trim(),lines:draft.lines||[]};setSongs(prev=>[saved,...prev.filter(s=>s.id!==saved.id)]);setSelected(saved.id);setShift(0);setError("");setTab("songs");}
+ async function importCatalog(file){
+  if(!file)return;
+  if(!auth?.canEdit||!cloudConfig){setError("Para publicar canciones necesitas iniciar sesión con permiso de edición.");return;}
+  setBusy("Preparando cancionero…");setError("");
+  try{
+    const d=JSON.parse(await file.text());
+    const incoming=Array.isArray(d)?d:d.songs;
+    if(!Array.isArray(incoming)||!incoming.length)throw Error("No hay canciones en el JSON.");
+    const clean=incoming.filter(s=>typeof s.title==="string"&&Array.isArray(s.lines)).map(s=>({
+      ...s,id:String(s.id||makeId()),category:s.category||"Misa",tags:Array.isArray(s.tags)?s.tags:[],
+      lines:s.lines.map(l=>({text:String(l.text||""),chords:Array.isArray(l.chords)?l.chords.filter(c=>Number.isFinite(c.index)&&typeof c.symbol==="string").map(c=>({index:Math.max(0,Math.min(c.index,String(l.text||"").length)),symbol:c.symbol})):[]}))
+    }));
+    if(!clean.length)throw Error("Ninguna canción válida.");
+    setBusy("Publicando "+clean.length+" canciones en AWS…");
+    const saved=await saveSongBatch(cloudConfig,clean);
+    if(saved.count!==clean.length)throw Error("La publicación no se completó.");
+    setSongs(prev=>{const ids=new Set(clean.map(x=>x.id));return [...clean,...prev.filter(x=>!ids.has(x.id))]});
+    setSelected(clean[0].id);setSectionFilter("Todas");setTab("songs");
+    setSharedState("Publicadas "+clean.length+" canciones en AWS.");
+  }catch(e){setError("No se pudo publicar el cancionero: "+e.message);}
+  finally{setBusy("");}
+ }
+ function startNew(){if(!auth?.canEdit){setError("Necesitas iniciar sesión para subir canciones.");return;}setDraft({id:makeId(),title:"",category:"Misa",tags:[],tempo:76,lines:[]});setRaw("");setError("");setTab("edit");}
+ function editSong(s){if(!auth?.canEdit){setError("Necesitas iniciar sesión para editar canciones.");return;}setDraft(structuredClone(s));setRaw(s.lines.map(l=>{let t=l.text;for(const c of [...l.chords].sort((a,b)=>b.index-a.index))t=t.slice(0,c.index)+"["+c.symbol+"]"+t.slice(c.index);return t}).join("\n"));setTab("edit");}
+ async function saveDraft(){
+  if(!auth?.canEdit||!cloudConfig){setError("Necesitas iniciar sesión con permiso de edición.");return;}
+  if(!draft?.title.trim()){setError("Escribe un título para guardar.");return;}
+  const saved={...draft,title:draft.title.trim(),lines:draft.lines||[]};
+  setBusy("Guardando canción en AWS…");setError("");
+  try{
+    await saveSong(cloudConfig,saved);
+    setSongs(prev=>[saved,...prev.filter(x=>x.id!==saved.id)]);
+    setSelected(saved.id);setShift(0);setTab("songs");
+    setSharedState("Canción publicada y disponible para todos.");
+  }catch(e){setError("No se pudo guardar: "+e.message);}
+  finally{setBusy("");}
+ }
  function modifyLine(lineIndex,update){setDraft(d=>({...d,lines:d.lines.map((l,i)=>i===lineIndex?update(l):l)}));}
  function addChord(lineIndex,index){const symbol=prompt("Acorde en esta sílaba (por ejemplo: Am7):","C");if(!symbol)return;modifyLine(lineIndex,l=>({...l,chords:[...l.chords,{index,symbol:symbol.trim()}].sort((a,b)=>a.index-b.index)}));}
  function editChord(lineIndex,ch){const symbol=prompt("Editar acorde (vacío para eliminar)",ch.symbol);if(symbol===null)return;modifyLine(lineIndex,l=>({...l,chords:l.chords.flatMap(c=>c===ch?(symbol.trim()?[{...c,symbol:symbol.trim()}]:[]):[c])}));}
