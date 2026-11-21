@@ -135,3 +135,85 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
 @media(max-width:950px){.brand small{display:none}.authName{max-width:170px}.authControls{max-width:220px}}
 @media(max-width:650px){.brand strong{font-size:17px}.brandIcon{width:35px;height:35px}.authControls{max-width:145px}.authName{font-size:9px}.authControls .primary,.authControls .subtle{font-size:10px;padding:8px 9px}.shell header{gap:9px;padding:0 12px}.shell header nav{gap:0}.shell header nav button{padding:9px}.brand{gap:5px}}
+
+/* Mobile song-reader priority: the catalog is a dropdown, not a permanent panel. */
+.mobileLibraryToggle{display:none}
+.mobileLibraryPanel{display:contents}
+@media(max-width:700px){
+ html,body,#root{height:100%;overflow:hidden}
+ .shell{height:100dvh;min-height:0;overflow:hidden}
+ .shell header{height:54px;flex:0 0 54px;padding:0 9px;gap:4px;overflow:hidden}
+ .brand{flex:0 1 auto;min-width:0;gap:5px}
+ .brandIcon{width:31px;height:31px;border-radius:8px;flex:none}
+ .brandIcon svg{width:18px;height:18px}
+ .brand strong{font-size:15px;white-space:nowrap;letter-spacing:-.06em}
+ .brand small{display:none}
+ .shell header nav{display:flex;gap:0;flex:0 0 auto}
+ .shell header nav button{padding:7px;min-width:29px;min-height:34px;border-radius:8px;font-size:0}
+ .shell header nav button svg{width:17px;height:17px}
+ .authControls{max-width:105px;min-width:0;flex:0 1 auto;gap:3px}
+ .authName{font-size:9px;line-height:1.2;max-width:105px;max-height:28px;overflow:hidden}
+ .authControls .primary,.authControls .subtle{font-size:10px;white-space:normal;text-align:center;padding:6px 7px;line-height:1.15}
+ .layout{display:flex;flex:1 1 0;position:relative;flex-direction:column;min-height:0;height:auto;overflow:hidden}
+ .layout aside,.layout aside.libraryOpen{position:absolute;z-index:15;top:0;left:0;right:0;width:100%;height:auto;max-height:none;overflow:visible;background:transparent;border:0;box-shadow:none;padding:0}
+ .mobileLibraryToggle{display:flex;align-items:center;gap:8px;background:#fffaf0;color:#252b57;border:0;border-bottom:1px solid #e6d7aa;width:100%;height:39px;min-height:39px;padding:0 13px;font-size:12px;font-weight:700;text-align:left}
+ .mobileLibraryCount{font-size:10px;padding:2px 6px;border-radius:10px;background:#f4ebd3}
+ .mobileLibraryChevron{margin-left:auto;font-size:17px;line-height:1}
+ .mobileLibraryPanel{display:none}
+ .layout aside.libraryOpen .mobileLibraryPanel{display:flex;position:absolute;top:39px;left:0;right:0;z-index:20;background:#fffdf8;box-shadow:0 13px 30px #1c23303a;border-bottom:1px solid #d0a73f;max-height:min(62dvh,470px);min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px;gap:8px;flex-direction:column}
+ .layout aside .asideHead{display:none}
+ .layout aside .search{padding:9px;min-height:37px}
+ .layout aside .search input,.layout aside .search select{font-size:12px}
+ .layout aside .songList{display:flex;flex-direction:column;flex:1 1 auto;overflow:auto;overflow-x:hidden;min-height:90px;max-height:min(30dvh,265px);gap:2px;overscroll-behavior:contain}
+ .layout aside .songItem{width:100%;flex:0 0 auto;padding:9px 12px}
+ .layout aside .songItem strong{font-size:12px}
+ .layout aside .songItem small{font-size:10px;margin-top:3px}
+ .layout aside .importButton,.layout aside .secondary.full,.layout aside .subtle.full{min-height:32px;font-size:11px;padding:6px 10px;flex:0 0 auto}
+ .layout aside .hint{font-size:10px;flex-shrink:0}
+ .layout .reader{height:auto;min-height:0;min-width:0;flex:1 1 0;display:flex;flex-direction:column;overflow:hidden;padding-top:39px}
+ .readerHead{padding:7px 10px 6px!important;display:flex;gap:8px;align-items:center;flex:0 0 auto;min-height:42px}
+ .readerHead>div:first-child{min-width:0;flex:1}
+ .readerHead .eyebrow{display:none}
+ .readerHead h1{font-size:clamp(16px,4.2vw,20px);line-height:1.2;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .readerHead .reviewNotice{font-size:9px;padding:2px 5px;margin:3px 0 0;max-height:30px;overflow:hidden}
+ .readerHead .actions{flex:none;gap:4px}
+ .readerHead .actions button{font-size:0;padding:6px!important;min-height:27px;min-width:27px}
+ .readerHead .actions button svg{width:15px;height:15px}
+ .toolbar{flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:5px 8px!important;min-height:41px;scrollbar-width:thin;overscroll-behavior-x:contain}
+ .toolbar .switch{flex:none;font-size:10px;white-space:nowrap;gap:3px}
+ .toolbar .switch input{width:13px;height:13px}
+ .toolbarSeparator{display:none}
+ .transpose{flex:none;gap:4px}
+ .transpose>span{display:none}
+ .transpose button{width:27px;height:27px;flex:none}
+ .transpose strong{font-size:10px;min-width:60px}
+ .toolbar .subtle{flex:none;font-size:10px;padding:5px 8px;min-height:27px}
+ .songScroll{flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:auto;overscroll-behavior-y:contain;padding:17px 13px 28px!important;-webkit-overflow-scrolling:touch}
+ .lyrics{font-size:clamp(16px,4.2vw,21px);line-height:1.48}
+ .songLine{min-height:50px;margin-bottom:10px;overflow-x:visible}
+ .songLine.blankLine{min-height:16px}
+ .lineGlyphs{padding-top:25px}
+ .chordColumn{bottom:1.25em}
+ .playback{flex:0 0 auto;display:flex;gap:7px;flex-wrap:nowrap;align-items:center;justify-content:space-between;padding:7px 10px calc(7px + env(safe-area-inset-bottom, 0px))!important;min-height:60px;overflow:hidden}
+ .playback .play{height:38px;width:38px;min-width:38px;flex:0 0 38px}
+ .playback label{display:flex;gap:3px;flex-direction:column;justify-content:center;align-items:flex-start;min-width:0;flex:1;font-size:9px;line-height:1.2}
+ .playback label strong{font-size:10px}
+ .playback input{width:100%;max-width:130px;height:14px;margin:2px 0 0}
+ .playback .hint{display:none}
+ .editor,.sessionsView{height:100%;overflow-y:auto}
+ .sessionsView{padding:15px 12px 50px}
+ .sessionsIntro{gap:8px}
+ .sessionsIntro h1{font-size:24px}
+ .sessionsIntro p{font-size:11px}
+ .sessionsIntro .primary{font-size:10px;padding:8px 10px}
+}
+@media(max-height:560px) and (max-width:700px){
+ .shell header{height:45px;flex-basis:45px}
+ .mobileLibraryToggle{height:34px;min-height:34px}
+ .layout aside.libraryOpen .mobileLibraryPanel{top:34px}
+ .layout .reader{padding-top:34px}
+ .readerHead{min-height:33px;padding:4px 9px!important}
+ .toolbar{min-height:34px;padding:3px 8px!important}
+ .playback{min-height:49px;padding:4px 9px calc(4px + env(safe-area-inset-bottom,0px))!important}
+ .playback .play{width:32px;height:32px;min-width:32px;flex-basis:32px}
+}
