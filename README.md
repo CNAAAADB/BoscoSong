@@ -1,16 +1,27 @@
 # BoscoSong
 
-Prototipo web (React + Vite) del cancionero del coro, preparado para GitHub Pages. No requiere AWS, base de datos remota, roles ni cuentas.
+Aplicación web (React + Vite) para coros, publicada en GitHub Pages. La lectura es pública. Para añadir, modificar o eliminar canciones, la plataforma utiliza una API AWS protegida con Cognito (tras desplegar y configurar el backend).
 
 ## Prueba con el cancionero CJAtocha 2024
 
-1. Descarga el JSON indexado generado a partir del PDF de 432 páginas.
-2. Abre la web de prueba de BoscoSong.
-3. En **Canciones**, pulsa **Importar cancionero JSON** y selecciona el archivo descargado.
+1. Abre la web de prueba de BoscoSong. La biblioteca de 1.419 canciones se descarga automáticamente desde los archivos JSON públicos del repositorio.
+2. Filtra y busca sin necesidad de cuenta.
+3. Para **publicar** canciones adicionales, usa una cuenta autorizada en Cognito y el botón **Publicar cancionero JSON** (solo cuando AWS esté configurado).
 4. Filtra por sección (por ejemplo, **Cantos de entrada** o **Cantos de comunión**) y busca por título o fragmento de letra.
 5. Abre una canción, activa o desactiva **Acordes**, utiliza **-** o **+** para transportar por semitonos y revisa el resultado visual.
 6. Pulsa **Editar** y luego en cualquier carácter para colocar un acorde. Pulsa sobre un acorde existente para modificarlo o quitarlo.
 7. La canción y sus cambios se guardan en **IndexedDB del navegador**. No hay sincronización entre dispositivos.
+
+## Acceso y biblioteca compartida
+
+- **Consulta pública:** todas las personas pueden abrir el cancionero y buscar canciones sin registrarse.
+- **Repositorio compartido:** `public/catalog/manifest.json` y cinco archivos de canciones en `public/catalog/part-*.json` están incluidos en el sitio estático.
+- **Edición protegida:** subir JSON/PDF/fotos, editar acordes y eliminar canciones requieren una cuenta Cognito del grupo `editors`. La API Lambda también comprueba este grupo antes de escribir en DynamoDB; no se confía en ocultar botones.
+- **Estado de despliegue:** el frontend y la plantilla AWS están preparados, pero mientras `public/config.json` no contenga la API y el cliente Cognito desplegados, la aplicación funcionará en modo consulta.
+- **Cambios:** una canción editada en AWS reemplaza la versión pública base; eliminar una canción añade una marca de ocultación. Los JSON históricos del repositorio no se borran físicamente por ello.
+- **Copia local:** IndexedDB conserva una caché por navegador, que no equivale a sincronización entre usuarios.
+
+Instrucciones de despliegue, seguridad e invitación de editores: [backend/README.md](backend/README.md).
 
 ## Diseño y sesiones (prototipo)
 
