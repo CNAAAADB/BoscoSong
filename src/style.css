@@ -125,3 +125,13 @@ nav button.current,nav button:hover,.songItem.selected,.songItem:hover,.sessionS
 .whiteKey.activeKey{background:#e6d7aa}
 .blackKey.activeBlack{background:#d0a73f}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline-color:#d0a73f}
+
+/* Auth controls: visitors read, only authenticated editors can publish. */
+.authControls{display:flex;align-items:center;gap:10px;max-width:370px;min-width:0;justify-content:flex-end}
+.authControls .primary,.authControls .subtle{white-space:nowrap}
+.authName{font-size:11px;font-weight:600;color:#252b57;line-height:1.5;text-align:right}
+.importDisabled{opacity:.46;cursor:not-allowed;pointer-events:none}
+.importDisabled input{display:none}
+button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
+@media(max-width:950px){.brand small{display:none}.authName{max-width:170px}.authControls{max-width:220px}}
+@media(max-width:650px){.brand strong{font-size:17px}.brandIcon{width:35px;height:35px}.authControls{max-width:145px}.authName{font-size:9px}.authControls .primary,.authControls .subtle{font-size:10px;padding:8px 9px}.shell header{gap:9px;padding:0 12px}.shell header nav{gap:0}.shell header nav button{padding:9px}.brand{gap:5px}}
