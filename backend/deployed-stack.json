@@ -331,7 +331,11 @@
           "Ref": "Api"
         },
         "StageName": "$default",
-        "AutoDeploy": true
+        "AutoDeploy": true,
+        "DefaultRouteSettings": {
+          "ThrottlingBurstLimit": 12,
+          "ThrottlingRateLimit": 6
+        }
       }
     },
     "Permission": {
