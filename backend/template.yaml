@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BoscoSong pilot - public catalog changes and authenticated song publishing
+Parameters:
+  FrontendOrigin:
+    Type: String
+    Default: https://cnaaaadb.github.io
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    Timeout: 12
+    MemorySize: 128
+Resources:
+  SongChanges:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+  SongEditorPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: BoscoSongEditors
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+  EditorsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: editors
+      UserPoolId: !Ref SongEditorPool
+      Description: Users permitted to create, edit and delete songs
+  SongEditorClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref SongEditorPool
+      ClientName: boscosong-web
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, profile]
+      SupportedIdentityProviders: [COGNITO]
+      CallbackURLs:
+        - https://cnaaaadb.github.io/BoscoSong/
+      LogoutURLs:
+        - https://cnaaaadb.github.io/BoscoSong/
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+  SongEditorDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub boscosong-${AWS::AccountId}-${AWS::Region}
+      UserPoolId: !Ref SongEditorPool
+  BoscoSongApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins: [!Ref FrontendOrigin]
+        AllowHeaders: [authorization, content-type]
+        AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
+        MaxAge: 600
+      Auth:
+        Authorizers:
+          BoscoSongJwt:
+            IdentitySource: '$request.header.Authorization'
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${SongEditorPool}
+              audience: [!Ref SongEditorClient]
+  SongApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./api
+      Handler: app.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SongChanges
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SongChanges
+      Events:
+        Changes:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BoscoSongApi
+            Path: /changes
+            Method: GET
+        Save:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BoscoSongApi
+            Path: /songs/{id}
+            Method: PUT
+            Auth:
+              Authorizer: BoscoSongJwt
+        Delete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BoscoSongApi
+            Path: /songs/{id}
+            Method: DELETE
+            Auth:
+              Authorizer: BoscoSongJwt
+        Batch:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref BoscoSongApi
+            Path: /songs/batch
+            Method: POST
+            Auth:
+              Authorizer: BoscoSongJwt
+Outputs:
+  ApiBase:
+    Value: !Sub https://${BoscoSongApi}.execute-api.${AWS::Region}.amazonaws.com
+  CognitoDomain:
+    Value: !Sub boscosong-${AWS::AccountId}-${AWS::Region}.auth.${AWS::Region}.amazoncognito.com
+  ClientId:
+    Value: !Ref SongEditorClient
+  UserPoolId:
+    Value: !Ref SongEditorPool
