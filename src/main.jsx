@@ -6,6 +6,7 @@ import {readSongs,writeSongs} from "./storage.js";
 import {transposeChord,chordTones} from "./music.js";
 import {extractPositionedSong,parseBracketedText} from "./importer.js";
 import SessionsPanel from "./SessionsPanel.jsx";
+import {loadConfig,loadPublicCatalog,loadChanges,applyChanges,currentAuth,finishLogin,beginLogin,logout,saveSong,saveSongBatch,deleteSong} from "./cloud.js";
 
 
 const STORAGE="boscosong.v1";
@@ -22,8 +23,36 @@ function shiftRoot(root,steps){const n=normalizeRoot(root);const pos=NOTES.index
 function PianoKeys({symbol}){const tones=chordTones(symbol);const white=["C","D","E","F","G","A","B"];const offsets=[0,1,2,3,4,5,6];return <div className="pianoWrap"><div className="pianoLabel">Acorde: <strong>{symbol}</strong> · notas resaltadas en ambas manos</div><div className="keyboard">{Array.from({length:14},(_,i)=>{const note=white[i%7],pos=NOTES.indexOf(note);return <div key={i} className={"whiteKey "+(tones.includes(pos)?"activeKey":"")}><small>{i===0||i===7?"C":""}</small></div>})}{Array.from({length:14},(_,i)=>{const note=white[i%7];if(note==="E"||note==="B")return null;const pos=NOTES.indexOf(note+"#");return <div key={i} className={"blackKey "+(tones.includes(pos)?"activeBlack":"")} style={{left:`calc((100% / 14) * ${i+1} - (100% / 14) * .28)`}}/>})}</div><p className="hint">Visualización orientativa de las notas del acorde, no una digitación obligatoria.</p></div>}
 function ChordLine({line,shift,showChords,onAdd,onEdit,editable=false}){const chars=[...line.text];const grouped=new Map();for(const ch of line.chords||[]){const idx=Math.min(Math.max(ch.index,0),chars.length);if(!grouped.has(idx))grouped.set(idx,[]);grouped.get(idx).push(ch);}return <div className={"songLine "+(!line.text?"blankLine":"")}><div className="lineGlyphs">{Array.from({length:chars.length+1},(_,i)=><span className="glyph" key={i}>{showChords&&grouped.has(i)&&<span className="chordColumn">{grouped.get(i).map((ch,n)=><button key={n} className="chord" onClick={()=>editable&&onEdit(ch)} title={editable?"Editar acorde":transposeChord(ch.symbol,shift)}>{transposeChord(ch.symbol,shift)}</button>)}</span>}{i<chars.length?<span className={editable?"editableChar":""} onClick={()=>editable&&onAdd(i)}>{chars[i]===" "?"\u00a0":chars[i]}</span>:editable?<button className="endAnchor" onClick={()=>onAdd(i)}>+</button>:null}</span>)}</div></div>;}
 function makeId(){return globalThis.crypto?.randomUUID?.()||Date.now()+"-"+Math.random();}
-function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=useState(false);const [sectionFilter,setSectionFilter]=useState("Todas");const [selected,setSelected]=useState("demo");const [tab,setTab]=useState(()=>location.hash.startsWith("#session=")?"sessions":"songs");const [query,setQuery]=useState("");const [draft,setDraft]=useState(null);const [raw,setRaw]=useState("");const [busy,setBusy]=useState("");const [error,setError]=useState("");const [shift,setShift]=useState(0);const [showChords,setShowChords]=useState(true);const [piano,setPiano]=useState(false);const [playing,setPlaying]=useState(false);const [tempo,setTempo]=useState(76);const [scrollRate,setScrollRate]=useState(2);const scrollRef=useRef(null);const fileRef=useRef(null);const [sessions,setSessions]=useState(()=>{try{return JSON.parse(localStorage.getItem("boscosong.sessions"))||[]}catch{return[]}});const [sessionId,setSessionId]=useState(null);
- useEffect(()=>{let alive=true;readSongs().then(stored=>{if(!alive)return;let fallback=null;try{fallback=JSON.parse(localStorage.getItem(STORAGE));}catch{}if(Array.isArray(stored)&&stored.length)setSongs(stored);else if(Array.isArray(fallback)&&fallback.length)setSongs(fallback);setReady(true)}).catch(()=>setReady(true));return()=>{alive=false}},[]);useEffect(()=>{if(ready)writeSongs(songs).catch(e=>setError("Error guardando canciones: "+e.message));},[songs,ready]);useEffect(()=>localStorage.setItem("boscosong.sessions",JSON.stringify(sessions)),[sessions]);
+function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=useState(false);const [sectionFilter,setSectionFilter]=useState("Todas");const [selected,setSelected]=useState("demo");const [tab,setTab]=useState(()=>location.hash.startsWith("#session=")?"sessions":"songs");const [query,setQuery]=useState("");const [draft,setDraft]=useState(null);const [raw,setRaw]=useState("");const [busy,setBusy]=useState("");const [error,setError]=useState("");const [shift,setShift]=useState(0);const [showChords,setShowChords]=useState(true);const [piano,setPiano]=useState(false);const [playing,setPlaying]=useState(false);const [tempo,setTempo]=useState(76);const [scrollRate,setScrollRate]=useState(2);const scrollRef=useRef(null);const fileRef=useRef(null);const [sessions,setSessions]=useState(()=>{try{return JSON.parse(localStorage.getItem("boscosong.sessions"))||[]}catch{return[]}});const [sessionId,setSessionId]=useState(null);const [cloudConfig,setCloudConfig]=useState(null);const [auth,setAuth]=useState(currentAuth);const [sharedState,setSharedState]=useState("Cargando cancionero compartido…");
+ useEffect(()=>{
+  let alive=true;
+  (async()=>{
+    let local=initial;
+    try{
+      const stored=await readSongs();
+      if(Array.isArray(stored)&&stored.length)local=stored;
+      else {const legacy=JSON.parse(localStorage.getItem(STORAGE)||"null");if(Array.isArray(legacy)&&legacy.length)local=legacy;}
+    }catch{}
+    if(!alive)return;setSongs(local);setReady(true);
+    let config=null;
+    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);setAuth(await finishLogin(config));}
+    catch(e){if(alive)setError("Inicio de sesión: "+e.message);}
+    try{
+      const publicSongs=await loadPublicCatalog();
+      let changes=[];
+      if(config){try{changes=await loadChanges(config)}catch(e){if(alive)setError("No se pudieron cargar los cambios de AWS: "+e.message)}}
+      if(!alive)return;
+      const shared=applyChanges(publicSongs,changes);
+      const known=new Set(shared.map(x=>x.id));
+      const extras=local.filter(x=>!known.has(x.id)&&!changes.some(ch=>ch.deleted&&ch.id===x.id));
+      setSongs([...shared,...extras]);setSelected(id=>id==="demo"&&shared.length?shared[0].id:id);
+      setSharedState("Biblioteca compartida: "+shared.length+" canciones");
+    }catch(e){if(alive)setSharedState("Catálogo compartido no disponible; usando copia local.");}
+  })();
+  return()=>{alive=false;};
+ },[]);
+ useEffect(()=>{if(ready)writeSongs(songs).catch(e=>setError("Error guardando copia local: "+e.message));},[songs,ready]);
+ useEffect(()=>localStorage.setItem("boscosong.sessions",JSON.stringify(sessions)),[sessions]);
  const song=songs.find(s=>s.id===selected);const sections=useMemo(()=>[...new Set(songs.flatMap(s=>s.tags||[]))].sort((a,b)=>a.localeCompare(b,"es")),[songs]);const found=useMemo(()=>songs.filter(s=>(sectionFilter==="Todas"||(s.tags||[]).includes(sectionFilter))&&(s.title+" "+(s.lines||[]).map(l=>l.text).join(" ")+" "+(s.tags||[]).join(" ")).toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es"))),[songs,query,sectionFilter]);
  useEffect(()=>{if(song)setTempo(song.tempo||76)},[selected]);
  useEffect(()=>{if(!playing)return;let frame,last;const tick=t=>{if(last&&scrollRef.current)scrollRef.current.scrollTop+=(t-last)/1000*(tempo/60)*scrollRate*12;last=t;frame=requestAnimationFrame(tick)};frame=requestAnimationFrame(tick);return()=>cancelAnimationFrame(frame)},[playing,tempo,scrollRate]);
