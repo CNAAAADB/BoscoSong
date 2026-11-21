@@ -1,0 +1,378 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "BoscoSong shared catalog AWS pilot",
+  "Resources": {
+    "Table": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ]
+      }
+    },
+    "Pool": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "UserPoolName": "BoscoSong-Editors-Pilot",
+        "UsernameAttributes": [
+          "email"
+        ],
+        "AutoVerifiedAttributes": [
+          "email"
+        ],
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true
+        },
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 12,
+            "RequireLowercase": true,
+            "RequireUppercase": true,
+            "RequireNumbers": true,
+            "RequireSymbols": true
+          }
+        }
+      }
+    },
+    "Group": {
+      "Type": "AWS::Cognito::UserPoolGroup",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "Pool"
+        },
+        "GroupName": "editors"
+      }
+    },
+    "Client": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "Pool"
+        },
+        "ClientName": "boscosong-web",
+        "GenerateSecret": false,
+        "SupportedIdentityProviders": [
+          "COGNITO"
+        ],
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "AllowedOAuthFlows": [
+          "code"
+        ],
+        "AllowedOAuthScopes": [
+          "openid",
+          "email",
+          "profile"
+        ],
+        "CallbackURLs": [
+          "https://cnaaaadb.github.io/BoscoSong/"
+        ],
+        "LogoutURLs": [
+          "https://cnaaaadb.github.io/BoscoSong/"
+        ],
+        "PreventUserExistenceErrors": "ENABLED"
+      }
+    },
+    "Domain": {
+      "Type": "AWS::Cognito::UserPoolDomain",
+      "Properties": {
+        "Domain": "boscosong-909186483504-eu-west-1",
+        "UserPoolId": {
+          "Ref": "Pool"
+        }
+      }
+    },
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "BoscoSongTableAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Scan",
+                    "dynamodb:BatchWriteItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Table",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "Fn": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "BoscoSongPilot-Songs",
+        "Runtime": "python3.12",
+        "Architectures": [
+          "arm64"
+        ],
+        "MemorySize": 128,
+        "Timeout": 15,
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "Role",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "\"\"\"BoscoSong song-change API (Python 3.12 / DynamoDB).\n\nThe bundled public catalog is immutable static JSON; writes are stored as\noverrides/tombstones in DynamoDB. Only users in Cognito's editors group\nare allowed to mutate songs. HTTP API JWT authorizer runs before Lambda.\n\"\"\"\nimport base64\nimport json\nimport os\nimport re\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nimport boto3\nfrom boto3.dynamodb.conditions import Attr\n\ntable = boto3.resource(\"dynamodb\").Table(os.environ[\"TABLE_NAME\"])\nID_RE = re.compile(r\"^[a-zA-Z0-9._:-]{1,160}$\")\n\n\ndef reply(status, payload):\n    return {\n        \"statusCode\": status,\n        \"headers\": {\"content-type\": \"application/json; charset=utf-8\"},\n        \"body\": json.dumps(payload, ensure_ascii=False, default=lambda x: float(x) if isinstance(x, Decimal) else str(x)),\n    }\n\n\ndef require_editor(event):\n    claims = (\n        event.get(\"requestContext\", {})\n        .get(\"authorizer\", {})\n        .get(\"jwt\", {})\n        .get(\"claims\", {})\n    )\n    raw = claims.get(\"cognito:groups\", [])\n    if isinstance(raw, str):\n        try:\n            groups = json.loads(raw)\n        except ValueError:\n            groups = [x.strip() for x in raw.strip(\"[]\").split(\",\")]\n    else:\n        groups = raw\n    if \"editors\" not in groups:\n        raise PermissionError(\"Tu cuenta no tiene permiso de edici?n\")\n    return claims.get(\"sub\", \"editor\")\n\n\ndef parse_song(data, id_override=None):\n    if not isinstance(data, dict):\n        raise ValueError(\"La canci?n debe ser un objeto JSON\")\n    sid = str(id_override or data.get(\"id\", \"\"))\n    if not ID_RE.fullmatch(sid):\n        raise ValueError(\"ID de canci?n no v?lido\")\n    title = str(data.get(\"title\", \"\")).strip()\n    if not title or len(title) > 180:\n        raise ValueError(\"T?tulo obligatorio, m?ximo 180 caracteres\")\n    lines = data.get(\"lines\", [])\n    if not isinstance(lines, list) or len(lines) > 500:\n        raise ValueError(\"M?ximo 500 l?neas por canci?n\")\n    clean_lines = []\n    for line in lines:\n        if not isinstance(line, dict):\n            raise ValueError(\"Cada l?nea debe ser un objeto\")\n        text = str(line.get(\"text\", \"\"))\n        if len(text) > 2000:\n            raise ValueError(\"L?nea demasiado larga\")\n        chords = line.get(\"chords\", [])\n        if not isinstance(chords, list) or len(chords) > 40:\n            raise ValueError(\"M?ximo 40 acordes por l?nea\")\n        clean = []\n        for c in chords:\n            if not isinstance(c, dict) or not isinstance(c.get(\"index\"), int) or isinstance(c.get(\"index\"), bool):\n                raise ValueError(\"Posici?n del acorde no v?lida\")\n            idx = c[\"index\"]\n            symbol = str(c.get(\"symbol\", \"\")).strip()\n            if not 0 <= idx <= len(text) or not symbol or len(symbol) > 40:\n                raise ValueError(\"Posici?n o s?mbolo del acorde incorrecto\")\n            clean.append({\"index\": idx, \"symbol\": symbol})\n        clean_lines.append({\"text\": text, \"chords\": clean})\n    tags = data.get(\"tags\", [])\n    if not isinstance(tags, list) or len(tags) > 20:\n        raise ValueError(\"M?ximo 20 etiquetas\")\n    tempo = data.get(\"tempo\", 76)\n    if isinstance(tempo, bool) or not isinstance(tempo, (int, Decimal)) or not 20 <= tempo <= 300:\n        tempo = 76\n    return {\n        \"id\": sid,\n        \"title\": title,\n        \"category\": str(data.get(\"category\", \"Misa\"))[:80],\n        \"tags\": [str(tag)[:60] for tag in tags],\n        \"tempo\": int(tempo),\n        \"lines\": clean_lines,\n        \"reviewStatus\": str(data.get(\"reviewStatus\", \"pendiente\"))[:32],\n        \"section\": str(data.get(\"section\", \"\"))[:80],\n        \"sourcePages\": [int(page) for page in (data.get(\"sourcePages\") or [])[:30] if isinstance(page, int) and not isinstance(page, bool) and 0 < page <= 100000],\n        \"number\": int(data.get(\"number\", 0)) if isinstance(data.get(\"number\"), int) and not isinstance(data.get(\"number\"), bool) else 0,\n    }\n\n\ndef put_song(song, editor):\n    table.put_item(Item={\n        \"id\": \"SONG#\" + song[\"id\"],\n        \"song\": song,\n        \"deleted\": False,\n        \"updatedAt\": datetime.now(timezone.utc).isoformat(),\n        \"updatedBy\": editor,\n    })\n\n\ndef get_changes(event):\n    query = event.get(\"queryStringParameters\") or {}\n    start = None\n    if query.get(\"cursor\"):\n        try:\n            start = json.loads(base64.urlsafe_b64decode(query[\"cursor\"] + \"===\"))\n        except Exception:\n            return reply(400, {\"message\": \"Cursor no v?lido\"})\n    params = {\n        \"FilterExpression\": Attr(\"id\").begins_with(\"SONG#\"),\n        \"Limit\": 150,\n        \"ProjectionExpression\": \"id,song,deleted\",\n    }\n    if start:\n        params[\"ExclusiveStartKey\"] = start\n    result = table.scan(**params)\n    changes = [\n        {\n            \"id\": row[\"id\"][5:],\n            \"deleted\": row.get(\"deleted\", False),\n            **({\"song\": row[\"song\"]} if row.get(\"song\") else {}),\n        }\n        for row in result.get(\"Items\", [])\n    ]\n    key = result.get(\"LastEvaluatedKey\")\n    cursor = base64.urlsafe_b64encode(json.dumps(key).encode()).decode().rstrip(\"=\") if key else None\n    return reply(200, {\"items\": changes, \"cursor\": cursor})\n\n\ndef handler(event, context):\n    method = event.get(\"requestContext\", {}).get(\"http\", {}).get(\"method\", \"\")\n    path = event.get(\"rawPath\", \"\")\n    try:\n        if method == \"GET\" and path == \"/changes\":\n            return get_changes(event)\n        editor = require_editor(event)\n        if method == \"PUT\" and path.startswith(\"/songs/\"):\n            sid = event.get(\"pathParameters\", {}).get(\"id\", \"\")\n            song = parse_song(json.loads(event.get(\"body\") or \"{}\"), sid)\n            put_song(song, editor)\n            return reply(200, {\"ok\": True, \"id\": sid})\n        if method == \"DELETE\" and path.startswith(\"/songs/\"):\n            sid = event.get(\"pathParameters\", {}).get(\"id\", \"\")\n            if not ID_RE.fullmatch(sid):\n                return reply(400, {\"message\": \"ID no v?lido\"})\n            table.put_item(Item={\n                \"id\": \"SONG#\" + sid, \"deleted\": True,\n                \"updatedAt\": datetime.now(timezone.utc).isoformat(),\n                \"updatedBy\": editor,\n            })\n            return reply(200, {\"ok\": True, \"id\": sid})\n        if method == \"POST\" and path == \"/songs/batch\":\n            body = json.loads(event.get(\"body\") or \"{}\")\n            raw = body.get(\"songs\", [])\n            if not isinstance(raw, list) or not 1 <= len(raw) <= 20:\n                return reply(400, {\"message\": \"Carga entre 1 y 20 canciones\"})\n            songs = [parse_song(s) for s in raw]\n            with table.batch_writer(overwrite_by_pkeys=[\"id\"]) as batch:\n                for song in songs:\n                    batch.put_item(Item={\n                        \"id\": \"SONG#\" + song[\"id\"], \"song\": song, \"deleted\": False,\n                        \"updatedAt\": datetime.now(timezone.utc).isoformat(),\n                        \"updatedBy\": editor,\n                    })\n            return reply(200, {\"ok\": True, \"count\": len(songs)})\n        return reply(404, {\"message\": \"Ruta no encontrada\"})\n    except PermissionError as error:\n        return reply(403, {\"message\": str(error)})\n    except (ValueError, TypeError, json.JSONDecodeError) as error:\n        return reply(400, {\"message\": str(error)})\n"
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "Table"
+            }
+          }
+        }
+      }
+    },
+    "Api": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": "BoscoSongPilot-HttpApi",
+        "ProtocolType": "HTTP",
+        "CorsConfiguration": {
+          "AllowOrigins": [
+            "https://cnaaaadb.github.io"
+          ],
+          "AllowHeaders": [
+            "authorization",
+            "content-type"
+          ],
+          "AllowMethods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "OPTIONS"
+          ],
+          "MaxAge": 600
+        }
+      }
+    },
+    "Integration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "Fn",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "Auth": {
+      "Type": "AWS::ApiGatewayV2::Authorizer",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "Name": "BoscoSongCognito",
+        "AuthorizerType": "JWT",
+        "IdentitySource": [
+          "$request.header.Authorization"
+        ],
+        "JwtConfiguration": {
+          "Issuer": {
+            "Fn::Sub": "https://cognito-idp.${AWS::Region}.amazonaws.com/${Pool}"
+          },
+          "Audience": [
+            {
+              "Ref": "Client"
+            }
+          ]
+        }
+      }
+    },
+    "Public": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "GET /changes",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "Write": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "PUT /songs/{id}",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
+        }
+      }
+    },
+    "Remove": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "DELETE /songs/{id}",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
+        }
+      }
+    },
+    "Batch": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "POST /songs/batch",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
+        }
+      }
+    },
+    "Stage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true
+      }
+    },
+    "Permission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "Fn"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/*"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiBase": {
+      "Value": {
+        "Fn::Sub": "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
+      }
+    },
+    "CognitoDomain": {
+      "Value": {
+        "Fn::Sub": "boscosong-909186483504-eu-west-1.auth.${AWS::Region}.amazoncognito.com"
+      }
+    },
+    "ClientId": {
+      "Value": {
+        "Ref": "Client"
+      }
+    },
+    "UserPoolId": {
+      "Value": {
+        "Ref": "Pool"
+      }
+    },
+    "TableName": {
+      "Value": {
+        "Ref": "Table"
+      }
+    }
+  }
+}
