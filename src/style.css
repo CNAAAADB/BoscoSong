@@ -217,3 +217,17 @@ button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
  .playback{min-height:49px;padding:4px 9px calc(4px + env(safe-area-inset-bottom,0px))!important}
  .playback .play{width:32px;height:32px;min-width:32px;flex-basis:32px}
 }
+
+@media(max-width:390px){
+ .shell header{gap:3px}
+ .brand strong{display:none}
+ .brandIcon{width:33px;height:33px}
+ .authControls{max-width:112px}
+ .authControls .authName{max-width:106px;overflow:hidden;text-overflow:ellipsis}
+ .shell header nav button{padding:6px;min-width:28px}
+ .songScroll{padding:12px 9px 24px!important}
+ .readerHead h1{font-size:16px}
+ .toolbar{gap:5px}
+ .playback{gap:5px}
+ .playback label{font-size:9px}
+}
