@@ -8,7 +8,7 @@ import {extractPositionedSong,parseBracketedText} from "./importer.js";
 import SessionsPanel from "./SessionsPanel.jsx";
 import {advanceScroll,sliderToScrollRate,scrollRateToSlider,formatScrollRate} from "./autoscroll.js";
 import {lyricRuns} from "./lyricRuns.js";
-import {loadConfig,loadPublicCatalog,loadChanges,applyChanges,currentAuth,finishLogin,beginLogin,logout,saveSong,saveSongBatch,deleteSong} from "./cloud.js";
+import {loadConfig,loadPublicCatalog,loadChanges,applyChanges,currentAuth,finishLogin,beginLogin,logout,saveSong,saveSongBatch,deleteSong,loadProfile,setProfile,updateAuthProfile,listSessions,saveSession,canManageSong,canManageSession} from "./cloud.js";
 
 
 const STORAGE="boscosong.v1";
@@ -67,7 +67,7 @@ function SpeedControl({rate,onChange,compact=false}){
 function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=useState(false);const [sectionFilter,setSectionFilter]=useState("Todas");const [selected,setSelected]=useState("demo");const [tab,setTab]=useState(()=>location.hash.startsWith("#session=")?"sessions":"songs");const [query,setQuery]=useState("");const [draft,setDraft]=useState(null);const [raw,setRaw]=useState("");const [busy,setBusy]=useState("");const [error,setError]=useState("");const [shift,setShift]=useState(0);const [showChords,setShowChords]=useState(true);const [piano,setPiano]=useState(false);const [playing,setPlaying]=useState(false);const [tempo,setTempo]=useState(76);const [scrollRate,setScrollRate]=useState(2);
  const [fontSize,setFontSize]=useState(()=>{try{const saved=Number(localStorage.getItem("boscosong.font-size"));return Number.isFinite(saved)&&saved>=14&&saved<=42?saved:22;}catch{return 22;}});
  const [presentationMode,setPresentationMode]=useState(false);
- const scrollRef=useRef(null);const readerRef=useRef(null);const nativeFullscreenRef=useRef(false);const fileRef=useRef(null);const [sessions,setSessions]=useState(()=>{try{return JSON.parse(localStorage.getItem("boscosong.sessions"))||[]}catch{return[]}});const [sessionId,setSessionId]=useState(null);const [cloudConfig,setCloudConfig]=useState(null);const [auth,setAuth]=useState(currentAuth);const [sharedState,setSharedState]=useState("Cargando cancionero compartido…");const [mobileLibraryOpen,setMobileLibraryOpen]=useState(false);
+ const scrollRef=useRef(null);const readerRef=useRef(null);const nativeFullscreenRef=useRef(false);const fileRef=useRef(null);const [sessions,setSessions]=useState(()=>{try{return JSON.parse(localStorage.getItem("boscosong.sessions"))||[]}catch{return[]}});const [sessionId,setSessionId]=useState(null);const [sessionContext,setSessionContext]=useState(null);const sessionSaveTimerRef=useRef(null);const sessionSavePendingRef=useRef(null);const sessionSaveQueueRef=useRef(Promise.resolve());const [sessionSaveState,setSessionSaveState]=useState("");const [cloudConfig,setCloudConfig]=useState(null);const [auth,setAuth]=useState(currentAuth);const [sharedState,setSharedState]=useState("Cargando cancionero compartido…");const [mobileLibraryOpen,setMobileLibraryOpen]=useState(false);
  useEffect(()=>{
   let alive=true;
   (async()=>{
@@ -79,7 +79,7 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
     }catch{}
     if(!alive)return;setSongs(local);setReady(true);
     let config=null;
-    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);setAuth(await finishLogin(config));}
+    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);const logged=await finishLogin(config);if(alive)setAuth(logged);if(logged){try{const profile=await loadProfile(config);if(alive)setAuth(updateAuthProfile(profile.displayName));}catch(e){if(alive)setError("Perfil: "+e.message);}}}
     catch(e){if(alive)setError("Inicio de sesión: "+e.message);}
     try{
       const publicSongs=await loadPublicCatalog();
@@ -87,18 +87,17 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
       if(config){try{changes=await loadChanges(config)}catch(e){if(alive)setError("No se pudieron cargar los cambios de AWS: "+e.message)}}
       if(!alive)return;
       const shared=applyChanges(publicSongs,changes);
-      const known=new Set(shared.map(x=>x.id));
-      const extras=local.filter(x=>!known.has(x.id)&&!changes.some(ch=>ch.deleted&&ch.id===x.id));
-      setSongs([...shared,...extras]);setSelected(id=>id==="demo"&&shared.length?shared[0].id:id);
+      setSongs(shared);setSelected(id=>id==="demo"&&shared.length?shared[0].id:id);
       setSharedState("Biblioteca compartida: "+shared.length+" canciones");
     }catch(e){if(alive)setSharedState("Catálogo compartido no disponible; usando copia local.");}
+    if(config){try{const items=await listSessions(config);if(alive)setSessions(items);}catch(e){if(alive)setError("Sesiones: "+e.message);}}
   })();
   return()=>{alive=false;};
  },[]);
  useEffect(()=>{if(ready)writeSongs(songs).catch(e=>setError("Error guardando copia local: "+e.message));},[songs,ready]);
  useEffect(()=>localStorage.setItem("boscosong.sessions",JSON.stringify(sessions)),[sessions]);
  const song=songs.find(s=>s.id===selected);const sections=useMemo(()=>[...new Set(songs.flatMap(s=>s.tags||[]))].sort((a,b)=>a.localeCompare(b,"es")),[songs]);const found=useMemo(()=>songs.filter(s=>(sectionFilter==="Todas"||(s.tags||[]).includes(sectionFilter))&&(s.title+" "+(s.lines||[]).map(l=>l.text).join(" ")+" "+(s.tags||[]).join(" ")).toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es"))),[songs,query,sectionFilter]);
- useEffect(()=>{if(song)setTempo(song.tempo||76)},[selected]);
+ useEffect(()=>{if(song&&!sessionContext)setTempo(song.tempo||76)},[selected,sessionContext?.id,sessionContext?.index]);
  useEffect(()=>{
   if(!playing||tab!=="songs")return;
   let frame,lastTime=0,carry=0;
