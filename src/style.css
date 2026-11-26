@@ -374,3 +374,73 @@ button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
  .reader .toolbar .subtle{order:1}
  .reader .toolbar .toolbarSeparator{order:2}
 }
+
+
+/* Responsive lyric lines: wrap between words, never detach a chord from
+   the character it annotates. Individual long words may wrap as a fallback. */
+.reader .songLine,
+.previewLyrics .songLine,
+.reader.presentationMode .songLine{
+ min-width:0;
+ max-width:100%;
+ overflow-x:visible!important;
+ white-space:normal;
+}
+.reader .lineGlyphs,
+.previewLyrics .lineGlyphs,
+.reader.presentationMode .lineGlyphs{
+ display:block!important;
+ width:100%!important;
+ min-width:0!important;
+ max-width:100%!important;
+ white-space:normal!important;
+ padding-top:0!important;
+ line-height:1.35;
+ overflow-wrap:normal;
+}
+.lyricWord{
+ display:inline-block;
+ vertical-align:baseline;
+ position:relative;
+ max-width:100%;
+ min-width:0;
+ white-space:normal;
+ padding-top:1.35em;
+ line-height:1.35;
+}
+.lyricGap{
+ display:inline;
+ position:relative;
+ white-space:pre-wrap;
+}
+.lyricGap .gapGlyph{
+ display:inline-block;
+ white-space:pre;
+}
+.lyricWord .glyph{
+ display:inline-block;
+ position:relative;
+ vertical-align:baseline;
+}
+.songLine.noChords .lyricWord{
+ padding-top:0;
+}
+.songLine.blankLine{
+ min-height:1.2em;
+}
+.lyricWord .chordColumn,
+.lyricGap .chordColumn{
+ z-index:1;
+}
+/* On narrow screens, the lyric panel can shrink, while the text wraps to
+   its available width instead of creating a sideways-scrolling strip. */
+.reader .songScroll,
+.reader.presentationMode .songScroll{
+ min-width:0;
+}
+.reader .lyrics,
+.reader.presentationMode .lyrics,
+.previewLyrics{
+ min-width:0;
+ max-width:100%;
+}
