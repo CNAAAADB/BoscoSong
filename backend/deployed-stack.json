@@ -88,7 +88,8 @@
         "Domain": "boscosong-909186483504-eu-west-1",
         "UserPoolId": {
           "Ref": "Pool"
-        }
+        },
+        "ManagedLoginVersion": 2
       }
     },
     "Role": {
