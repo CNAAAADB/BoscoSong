@@ -223,29 +223,30 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
     const incoming=Array.isArray(d)?d:d.songs;
     if(!Array.isArray(incoming)||!incoming.length)throw Error("No hay canciones en el JSON.");
     const clean=incoming.filter(s=>typeof s.title==="string"&&Array.isArray(s.lines)).map(s=>({
-      ...s,id:String(s.id||makeId()),category:s.category||"Misa",tags:Array.isArray(s.tags)?s.tags:[],
+      ...s,id:"usr-"+makeId(),category:s.category||"Misa",tags:Array.isArray(s.tags)?s.tags.filter(t=>!String(t).startsWith("@")):[],
       lines:s.lines.map(l=>({text:String(l.text||""),chords:Array.isArray(l.chords)?l.chords.filter(c=>Number.isFinite(c.index)&&typeof c.symbol==="string").map(c=>({index:Math.max(0,Math.min(c.index,String(l.text||"").length)),symbol:c.symbol})):[]}))
     }));
     if(!clean.length)throw Error("Ninguna canción válida.");
     setBusy("Publicando "+clean.length+" canciones en AWS…");
-    const saved=await saveSongBatch(cloudConfig,clean);
-    if(saved.count!==clean.length)throw Error("La publicación no se completó.");
-    setSongs(prev=>{const ids=new Set(clean.map(x=>x.id));return [...clean,...prev.filter(x=>!ids.has(x.id))]});
-    setSelected(clean[0].id);setSectionFilter("Todas");setTab("songs");
+    const result=await saveSongBatch(cloudConfig,clean);
+    if(result.count!==clean.length)throw Error("La publicación no se completó.");
+    const uploaded=result.songs;
+    setSongs(prev=>{const ids=new Set(uploaded.map(x=>x.id));return [...uploaded,...prev.filter(x=>!ids.has(x.id))]});
+    setSelected(uploaded[0].id);setSectionFilter("Todas");setTab("songs");
     setSharedState("Publicadas "+clean.length+" canciones en AWS.");
   }catch(e){setError("No se pudo publicar el cancionero: "+e.message);}
   finally{setBusy("");}
  }
- function startNew(){if(!auth?.canEdit){setError("Necesitas iniciar sesión para subir canciones.");return;}setDraft({id:makeId(),title:"",category:"Misa",tags:[],tempo:76,lines:[]});setRaw("");setError("");setTab("edit");}
- function editSong(s){if(!auth?.canEdit){setError("Necesitas iniciar sesión para editar canciones.");return;}setDraft(structuredClone(s));setRaw(s.lines.map(l=>{let t=l.text;for(const c of [...l.chords].sort((a,b)=>b.index-a.index))t=t.slice(0,c.index)+"["+c.symbol+"]"+t.slice(c.index);return t}).join("\n"));setTab("edit");}
+ function startNew(){if(!auth?.canEdit){setError("Necesitas iniciar sesión para subir canciones.");return;}setDraft({id:"usr-"+makeId(),title:"",category:"Misa",tags:[],tempo:76,lines:[]});setRaw("");setError("");setTab("edit");}
+ function editSong(s){if(!canManageSong(auth,s)){setError("Solo el autor de la canción puede editarla.");return;}setDraft(structuredClone(s));setRaw(s.lines.map(l=>{let t=l.text;for(const c of [...l.chords].sort((a,b)=>b.index-a.index))t=t.slice(0,c.index)+"["+c.symbol+"]"+t.slice(c.index);return t}).join("\n"));setTab("edit");}
  async function saveDraft(){
   if(!auth?.canEdit||!cloudConfig){setError("Necesitas iniciar sesión con permiso de edición.");return;}
   if(!draft?.title.trim()){setError("Escribe un título para guardar.");return;}
   const saved={...draft,title:draft.title.trim(),lines:draft.lines||[]};
   setBusy("Guardando canción en AWS…");setError("");
   try{
-    await saveSong(cloudConfig,saved);
-    setSongs(prev=>[saved,...prev.filter(x=>x.id!==saved.id)]);
+    const stored=await saveSong(cloudConfig,saved);
+    setSongs(prev=>[stored,...prev.filter(x=>x.id!==stored.id)]);
     setSelected(saved.id);setShift(0);setTab("songs");
     setSharedState("Canción publicada y disponible para todos.");
   }catch(e){setError("No se pudo guardar: "+e.message);}
@@ -262,7 +263,7 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
    if(file.name.toLowerCase().endsWith(".json")){
      const payload=JSON.parse(await file.text());
      if(typeof payload.title==="string"&&Array.isArray(payload.lines)){
-       setDraft(d=>({...d,...payload,id:d?.id||makeId()}));
+       setDraft(d=>({...d,...payload,id:d?.id||"usr-"+makeId(),ownerSub:d?.ownerSub,ownerName:d?.ownerName}));
        lines=payload.lines;
      }else{await importCatalog(file);return;}
    }else if(file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf")){
