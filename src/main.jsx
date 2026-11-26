@@ -145,6 +145,75 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
    try{const exit=document.exitFullscreen();if(exit&&typeof exit.catch==="function")exit.catch(()=>{});}catch{}
   }
  }
+
+ const activeSession=sessionContext?sessions.find(x=>x.id===sessionContext.id):null;
+ const sessionEntries=activeSession?.songs||[];
+ const activeEntry=sessionContext?sessionEntries[sessionContext.index]:null;
+ const sessionIsOwner=canManageSession(auth,activeSession);
+ function openSessionSong(sessionId,index){
+  const source=sessions.find(x=>x.id===sessionId);
+  const entries=source?.songs||[];
+  const entry=entries[index];
+  if(!entry)return;
+  setSessionContext({id:sessionId,index});
+  setSessionSaveState("");
+  setSelected(entry.songId);
+  setShift(Number(entry.transpose)||0);
+  setScrollRate(Number(entry.speed)||2);
+  setTempo(Number(entry.tempo)||songs.find(x=>x.id===entry.songId)?.tempo||76);
+  setMobileLibraryOpen(false);
+  setPlaying(false);
+  setTab("songs");
+ }
+ function openNeighbor(direction){
+  if(!sessionContext||!activeSession)return;
+  const target=sessionContext.index+direction;
+  if(target>=0&&target<sessionEntries.length)openSessionSong(activeSession.id,target);
+ }
+ function scheduleSessionSetting(patch){
+  if(!sessionContext||!sessionIsOwner||!cloudConfig)return;
+  const session=sessionSavePendingRef.current?.id===activeSession?.id?sessionSavePendingRef.current:activeSession;
+  if(!session||!Array.isArray(session.songs))return;
+  const next={...session,songs:session.songs.map((entry,index)=>index===sessionContext.index?{...entry,...patch}:entry)};
+  sessionSavePendingRef.current=next;
+  setSessions(prev=>prev.map(item=>item.id===next.id?next:item));
+  setSessionSaveState("Guardando ajustes…");
+  clearTimeout(sessionSaveTimerRef.current);
+  sessionSaveTimerRef.current=setTimeout(()=>{
+   const payload=sessionSavePendingRef.current;
+   sessionSavePendingRef.current=null;
+   if(!payload)return;
+   sessionSaveQueueRef.current=sessionSaveQueueRef.current.catch(()=>{}).then(()=>saveSession(cloudConfig,payload));
+   sessionSaveQueueRef.current.then(()=>setSessionSaveState("Ajustes guardados")).catch(err=>{
+    setSessionSaveState("No se guardaron los ajustes");
+    setError("Error al guardar la sesión: "+err.message);
+   });
+  },850);
+ }
+ function changeTone(delta){
+  const next=Math.max(-24,Math.min(24,shift+delta));
+  setShift(next);scheduleSessionSetting({transpose:next});
+ }
+ function changeSpeed(rate){
+  setScrollRate(rate);scheduleSessionSetting({speed:rate});
+ }
+ function changeTempo(bpm){
+  const next=Math.min(240,Math.max(40,bpm));
+  setTempo(next);scheduleSessionSetting({tempo:next});
+ }
+ async function refreshSessions(){
+  if(!cloudConfig)return;
+  try{setSessions(await listSessions(cloudConfig));}catch(e){setError("No se pudieron actualizar las sesiones: "+e.message);}
+ }
+ async function changeDisplayName(){
+  if(!cloudConfig||!auth)return;
+  const answer=window.prompt("Nombre visible para tus canciones y sesiones:",auth.displayName||auth.name);
+  if(answer===null)return;
+  try{
+   const result=await setProfile(cloudConfig,answer.trim());
+   setAuth(updateAuthProfile(result.displayName));
+  }catch(e){setError("Nombre de usuario: "+e.message);}
+ }
  async function importCatalog(file){
   if(!file)return;
   if(!auth?.canEdit||!cloudConfig){setError("Para publicar canciones necesitas iniciar sesión con permiso de edición.");return;}
