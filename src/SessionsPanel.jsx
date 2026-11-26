@@ -21,7 +21,7 @@ const cloneEntries=(session,songs)=>Array.isArray(session.songs)&&session.songs.
  :(session.songIds||[]).map(id=>rowSettings({songId:id},songs.find(s=>s.id===id)));
 const speedChoices=[0.02,0.05,0.1,0.2,0.35,0.5,0.75,1,1.5,2,3,5];
 
-export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,config,onRefresh}){
+export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,config,onRefresh,focusSessionId=null}){
  const [selected,setSelected]=useState(null);
  const [draft,setDraft]=useState(null);
  const [search,setSearch]=useState("");
@@ -30,6 +30,7 @@ export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,c
  const [message,setMessage]=useState("");
  const [busy,setBusy]=useState(false);
  const seenHash=useRef("");
+ useEffect(()=>{if(focusSessionId){setSelected(focusSessionId);setDraft(null);}},[focusSessionId]);
  const current=sessions.find(s=>s.id===selected);
  const owned=canManageSession(auth,current);
  const candidates=useMemo(()=>songs.filter(s=>(s.title+" "+(s.tags||[]).join(" "))
