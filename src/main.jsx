@@ -79,7 +79,7 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
     }catch{}
     if(!alive)return;setSongs(local);setReady(true);
     let config=null;
-    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);const logged=await finishLogin(config);if(alive)setAuth(logged);if(logged){try{const profile=await loadProfile(config);if(alive)setAuth(updateAuthProfile(profile.displayName));}catch(e){if(alive)setError("Perfil: "+e.message);}}}
+    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);const logged=await finishLogin(config);if(alive)setAuth(logged);if(location.hash.startsWith("#session=")&&alive)setTab("sessions");if(logged){try{const profile=await loadProfile(config);if(alive)setAuth(updateAuthProfile(profile.displayName));}catch(e){if(alive)setError("Perfil: "+e.message);}}}
     catch(e){if(alive)setError("Inicio de sesión: "+e.message);}
     try{
       const publicSongs=await loadPublicCatalog();
