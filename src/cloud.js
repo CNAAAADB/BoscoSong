@@ -92,9 +92,10 @@ export async function finishLogin(c){
  sessionStorage.setItem(AUTH_KEY,JSON.stringify(auth));
  return auth;
 }
-export function updateAuthProfile(displayName){
+export function updateAuthProfile(profile){
  const value=currentAuth();if(!value)return null;
- const updated={...value,displayName};
+ const username=typeof profile==="string"?profile:(profile?.username||null);
+ const updated={...value,username,usernameRequired:!username,displayName:username||value.name};
  sessionStorage.setItem(AUTH_KEY,JSON.stringify(updated));
  return updated;
 }
@@ -156,8 +157,8 @@ export function canManageSession(auth,session){
  return Boolean(auth?.sub&&session?.ownerSub===auth.sub);
 }
 export async function loadProfile(c){return apiFetch(c,"/profile");}
-export async function setProfile(c,displayName){
- return apiFetch(c,"/profile",{method:"PUT",body:JSON.stringify({displayName})});
+export async function setProfile(c,username){
+ return apiFetch(c,"/profile",{method:"PUT",body:JSON.stringify({username})});
 }
 export async function saveSong(c,song){
  if(!song?.id)throw Error("La canción no tiene ID");
