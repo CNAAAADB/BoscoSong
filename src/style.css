@@ -363,3 +363,14 @@ button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
  .presentationControls .speedControl{min-width:52px}
  .presentationControls .speedControl>span{flex-direction:column;gap:0;line-height:1.15;font-size:9px}
 }
+
+
+/* Keep key controls reachable first on narrow screens. */
+.reader.presentationMode .pianoSection{display:none!important}
+@media(max-width:700px){
+ .reader .toolbar .transpose{order:-2}
+ .reader .toolbar .fontControls{order:-1}
+ .reader .toolbar .switch{order:0}
+ .reader .toolbar .subtle{order:1}
+ .reader .toolbar .toolbarSeparator{order:2}
+}
