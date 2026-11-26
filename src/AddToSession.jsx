@@ -2,11 +2,8 @@ import React,{useMemo,useState} from "react";
 import {BookOpen,Check,ChevronRight,LockKeyhole,Plus,Search,X} from "lucide-react";
 import {canManageSession,saveSession} from "./cloud.js";
 import {formatScrollRate} from "./autoscroll.js";
+import {sessionWithSong,containsSessionSong} from "./sessionEntries.js";
 
-function newEntry(song,transpose,speed,tempo){
- return {songId:song.id,transpose:Math.max(-24,Math.min(24,Number(transpose)||0)),
-  speed:Number(speed)||2,tempo:Math.max(40,Math.min(240,Number(tempo)||song.tempo||76))};
-}
 
 export default function AddToSession({
  song,auth,config,sessions,onClose,onSaved,onViewSession,onLogin,onSignup,
@@ -29,20 +26,14 @@ export default function AddToSession({
   if(target&&!canManageSession(auth,target)){
    setError("Solo puedes añadir canciones a tus propias sesiones.");return;
   }
-  const previous=target
-   ?Array.isArray(target.songs)&&target.songs.length
-    ?target.songs
-    :(target.songIds||[]).map(id=>({songId:id,transpose:0,speed:2,tempo:76}))
-   :[];
-  if(previous.some(e=>e.songId===song.id)){
-   setError("Esta canción ya está incluida en la sesión.");return;
-  }
+  let payload;
+  try{
+   payload=sessionWithSong(target,song,{transpose,speed,tempo});
+   if(!target)payload.title=title;
+  }catch(e){setError(e.message);return;}
   setSaving(target?.id||"new");setError("");
   try{
-   const entry=newEntry(song,transpose,speed,tempo);
-   const stored=await saveSession(config,target
-    ?{...target,songs:[...previous,entry]}
-    :{title,songs:[entry]});
+   const stored=await saveSession(config,payload);
    onSaved(stored);
    setSuccess(stored);
   }catch(e){setError("No se pudo guardar la canción: "+e.message);}
@@ -78,7 +69,7 @@ export default function AddToSession({
      <label className="sessionPickerSearch"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar mis sesiones…" aria-label="Buscar sesiones propias"/></label>
      <div className="sessionPickerList">
       {owned.map(session=>{
-       const hasSong=(session.songs||[]).some(e=>e.songId===song.id)||(session.songIds||[]).includes(song.id);
+       const hasSong=containsSessionSong(session,song.id);
        return <button type="button" className="sessionPickerOption" key={session.id}
         disabled={Boolean(saving)||hasSong} onClick={()=>save(session)}>
         <span className="sessionPickerOptionIcon"><BookOpen size={17}/></span>
