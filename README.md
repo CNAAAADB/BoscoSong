@@ -10,7 +10,7 @@ La biblioteca inicial de 1.419 canciones se descarga automáticamente de los JSO
 
 - **Crear cuenta**: desde la web, Cognito permite registrarse con correo y confirmarlo mediante email.
 - **Entrar**: acceso con Cognito Authorization Code + PKCE, sin credenciales AWS ni contraseñas almacenadas en el frontend.
-- **Nombre de usuario**: pulsar el nombre `@...` del encabezado para elegir el nombre visible. El servidor añade automáticamente `@nombre` a las etiquetas de canciones nuevas y a las sesiones. No se aceptan etiquetas de autor falsificadas.
+- **Nombre de usuario único**: tras iniciar sesión por primera vez, cada persona debe reservar un identificador `@usuario` (3–24 caracteres, letras —incluidas ñ y tildes—, números y guion bajo). No distingue mayúsculas y minúsculas; AWS impide los duplicados mediante una transacción de DynamoDB. El nombre se fija para mantener estables las etiquetas de autor. No se pueden publicar canciones ni crear/modificar sesiones hasta elegirlo. El servidor añade automáticamente `@usuario` a las canciones y sesiones nuevas; no se admiten etiquetas de autor falsificadas.
 - **Canciones nuevas**: cada cuenta puede subir imágenes, PDF, TXT o JSON y guardar canciones. El propietario queda identificado con el `sub` del token Cognito. Solo ese usuario (o un administrador) puede editarlas o eliminarlas; Lambda valida el permiso.
 - **Cantos históricos del cancionero**: siguen sin un usuario propietario; solo el grupo `editors` puede modificarlos. Las canciones publicadas por miembros particulares solo permiten edición de su autor y administradores.
 
