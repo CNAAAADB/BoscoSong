@@ -1,81 +1,50 @@
 # BoscoSong
 
-Aplicación web (React + Vite) para coros, publicada en GitHub Pages. La lectura es pública. Para añadir, modificar o eliminar canciones, la plataforma utiliza una API AWS protegida con Cognito (tras desplegar y configurar el backend).
+Cancionero colaborativo para coros y músicos. **React + Vite + GitHub Pages** para la interfaz; **Cognito + API Gateway + Lambda + DynamoDB** para cuentas y modificaciones compartidas. Se mantiene la tipografía **Montserrat** y la paleta `#252b57`, `#d0a73f` y `#e6d7aa`.
 
-## Prueba con el cancionero CJAtocha 2024
+## Consultar canciones
 
-1. Abre la web de prueba de BoscoSong. La biblioteca de 1.419 canciones se descarga automáticamente desde los archivos JSON públicos del repositorio.
-2. Filtra y busca sin necesidad de cuenta.
-3. Para **publicar** canciones adicionales, usa una cuenta autorizada en Cognito y el botón **Publicar cancionero JSON** (solo cuando AWS esté configurado).
-4. Filtra por sección (por ejemplo, **Cantos de entrada** o **Cantos de comunión**) y busca por título o fragmento de letra.
-5. Abre una canción, activa o desactiva **Acordes**, utiliza **-** o **+** para transportar por semitonos y revisa el resultado visual.
-6. Pulsa **Editar** y luego en cualquier carácter para colocar un acorde. Pulsa sobre un acorde existente para modificarlo o quitarlo.
-7. La canción y sus cambios se guardan en **IndexedDB del navegador**. No hay sincronización entre dispositivos.
+La biblioteca inicial de 1.419 canciones se descarga automáticamente de los JSON estáticos en `public/catalog/`. Cualquiera puede buscar por letra, título o sección y visualizar las letras, acordes y guía de piano, transportarlos por semitonos, cambiar el tamaño de letra o usar la pantalla completa y el desplazamiento automático.
 
-## Acceso y biblioteca compartida
+## Cuentas y permisos
 
-- **Consulta pública:** todas las personas pueden abrir el cancionero y buscar canciones sin registrarse.
-- **Repositorio compartido:** `public/catalog/manifest.json` y cinco archivos de canciones en `public/catalog/part-*.json` están incluidos en el sitio estático.
-- **Edición protegida:** subir JSON/PDF/fotos, editar acordes y eliminar canciones requieren una cuenta Cognito del grupo `editors`. La API Lambda también comprueba este grupo antes de escribir en DynamoDB; no se confía en ocultar botones.
-- **Estado de despliegue:** el frontend y la plantilla AWS están preparados, pero mientras `public/config.json` no contenga la API y el cliente Cognito desplegados, la aplicación funcionará en modo consulta.
-- **Cambios:** una canción editada en AWS reemplaza la versión pública base; eliminar una canción añade una marca de ocultación. Los JSON históricos del repositorio no se borran físicamente por ello.
-- **Copia local:** IndexedDB conserva una caché por navegador, que no equivale a sincronización entre usuarios.
+- **Crear cuenta**: desde la web, Cognito permite registrarse con correo y confirmarlo mediante email.
+- **Entrar**: acceso con Cognito Authorization Code + PKCE, sin credenciales AWS ni contraseñas almacenadas en el frontend.
+- **Nombre de usuario**: pulsar el nombre `@...` del encabezado para elegir el nombre visible. El servidor añade automáticamente `@nombre` a las etiquetas de canciones nuevas y a las sesiones. No se aceptan etiquetas de autor falsificadas.
+- **Canciones nuevas**: cada cuenta puede subir imágenes, PDF, TXT o JSON y guardar canciones. El propietario queda identificado con el `sub` del token Cognito. Solo ese usuario (o un administrador) puede editarlas o eliminarlas; Lambda valida el permiso.
+- **Cantos históricos del cancionero**: siguen sin un usuario propietario; solo el grupo `editors` puede modificarlos. Las canciones publicadas por miembros particulares solo permiten edición de su autor y administradores.
 
-Instrucciones de despliegue, seguridad e invitación de editores: [backend/README.md](backend/README.md).
+## Sesiones compartidas
 
-## Diseño y sesiones (prototipo)
+- Todas las sesiones se consultan desde DynamoDB; se buscan por título, creador o código `BS-...`. Se comparte un enlace con el código.
+- Solo una persona autenticada puede crear sesiones. Solo el propietario puede editar su nombre, orden y contenido musical.
+- Cada canción de la sesión almacena sus ajustes de transporte (en semitonos), velocidad de desplazamiento y BPM.
+- Al abrir una canción desde una sesión se recuperan esos ajustes. El visor es el mismo que el cancionero habitual y permite ir a la canción anterior/siguiente sin salir de la sesión.
+- Si el dueño cambia tono, velocidad o BPM dentro del visor, los cambios se guardan con una pequeña espera para evitar llamadas excesivas; otros visitantes pueden practicar con ajustes locales pero **no modificar la sesión persistida**.
+- Las sesiones históricas exclusivamente locales no se han publicado automáticamente en AWS. Si tienes un JSON de una sesión anterior, conserva una copia antes de limpiar los datos del navegador.
 
-- **Montserrat** es la única familia tipográfica; colores oficiales `#252b57`, `#d0a73f` y `#e6d7aa`.
-- La lista lateral de canciones se desplaza independientemente del visor.
-- Las sesiones permiten buscar, crear, ordenar canciones y **publicar**. Una vez publicadas, el formulario no permite cambiarlas.
-- Se puede compartir el **enlace completo** de una sesión o exportar/importar JSON para abrirla en otro dispositivo. Se puede buscar un código corto solo entre las sesiones cargadas en ese navegador.
-- Los enlaces completos guardan la lista de IDs de canciones, **no el contenido completo del cancionero**; cada dispositivo debe tener importadas las canciones correspondientes.
-- Sin un backend no existe un catálogo global de sesiones creadas por todos los visitantes, ni almacenamiento compartido de nuevos PDF, imágenes o JSON. **No afirmar sincronización global mientras esté en GitHub Pages estático**.
-- Las canciones se guardan en IndexedDB local y las sesiones se guardan como JSON en localStorage del navegador. Para copias de seguridad, exportar el JSON.
+## Tecnología y persistencia
 
-## OCR y calidad de acordes
+- GitHub Pages distribuye la interfaz y el cancionero base. DynamoDB guarda canciones añadidas o editadas, marcas de borrado, perfiles de usuario y sesiones.
+- Los cambios se consultan por API y se superponen al cancionero estático. IndexedDB sigue siendo una caché en cada navegador, no el origen de la verdad.
+- Cognito y API Gateway comprueban JWT; Lambda verifica el propietario mediante la identidad del token y expresiones condicionales de DynamoDB.
+- Infraestructura declarativa real: `backend/deployed-stack.json` (stack `BoscoSongPilot` en `eu-west-1`). Código fuente Lambda: `backend/api/app.py`.
+- Consulta pública, pero las escrituras requieren iniciar sesión. Las cargas deben corresponder a material que tengas permiso para compartir.
 
-El importador PDF/imagen intenta reconocer líneas de acordes por separado, usando coordenadas de cajas de palabras para situarlos sobre los caracteres de la letra. Incluye preprocesamiento de imagen y segunda lectura cuando no se detectan acordes. **Es una aproximación y requiere revisión humana** de los acordes y la sílaba exacta; no se garantiza OCR perfecto.
+## OCR y exactitud musical
 
-Hay pruebas de regresión de música y OCR con:
+El importador intenta distinguir acordes de letra con cajas tipográficas y coordenadas OCR. La posición acorde-sílaba se guarda por índice de carácter y el visor adapta las líneas a móvil sin separarlos deliberadamente. La detección debe revisarse frente a la fuente original; todavía no hay reconocimiento ni transposición de partituras musicales.
 
-```bash
-npm test
-```
-
-## Revisión de la importación
-
-Las líneas y los acordes se estimaron mediante las coordenadas tipográficas del PDF original, teniendo en cuenta el diseño en dos columnas. **No se ha revisado musicalmente cada canción**, por lo que los anclajes, las transposiciones especiales, el texto y los títulos deben verificarse frente al PDF antes de interpretarlos en una celebración.
-
-La etiqueta `tags` guarda el nombre original de la sección del documento; `sourcePages` identifica las páginas PDF de referencia. El campo `reviewStatus` distingue `pendiente` (texto extraído sin revisar) y `sin contenido` (referencia detectada solo en el índice).
-
-Las grafías españolas mantienen la distinción mayúscula/menor: `LA` (La mayor) y `la` (La menor). `+7` aislado no permite inferir por sí solo la raíz del acorde y requiere revisión.
-
-### Alcance actual
-
-- Visualización de letras y acordes, búsqueda y filtro por sección.
-- Guía básica de notas armónicas al piano (no es una partitura ni una digitación fija).
-- Transporte cromático en semitonos.
-- Sesiones locales ordenadas y duplicables.
-- Autoscroll aproximado controlado con BPM y velocidad: **no sigue un mapa temporal por sílabas**.
-- Importación individual de PDF con texto, imágenes y TXT en el editor.
-- Importación masiva del cancionero mediante JSON, conservado localmente.
-
-No hay todavía sesiones multiusuario, sincronización, reconocimiento musical de partituras ni transporte de pentagramas.
-
-## Desarrollo local
+## Desarrollo
 
 ```bash
 npm install
+npm test
 npm run dev
 ```
 
-## GitHub Pages
+La publicación de GitHub Pages se ejecuta en `.github/workflows/pages.yml`. URL: https://cnaaaadb.github.io/BoscoSong/
 
-El proyecto está configurado con la ruta Vite `/BoscoSong/` y un workflow `.github/workflows/pages.yml`. En **Settings > Pages > Build and deployment**, seleccionar **GitHub Actions** como Source para evitar que un despliegue Jekyll del origen de rama reemplace el construido con React.
+### Seguridad y costes
 
-URL prevista: https://cnaaaadb.github.io/BoscoSong/
-
-## Datos y privacidad
-
-El PDF del cancionero **no se incluye en este repositorio**. La importación desde JSON se hace en el navegador, de modo que las canciones no se publican automáticamente en GitHub Pages. Antes de compartir públicamente el material, revisar derechos de reproducción y distribución. Evitar borrar los datos del navegador sin exportar una copia.
+Cognito solo almacena credenciales dentro de AWS. No colocar contraseñas, secretos ni claves IAM en GitHub. El stack es serverless y se ha limitado la tasa de API a 6 solicitudes/s, pero AWS puede cobrar por el uso, y el registro público necesita vigilancia contra abuso. Los datos de canciones y sesiones creados por usuarios se publican a todos los visitantes por decisión de diseño de este prototipo.
