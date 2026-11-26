@@ -151,10 +151,10 @@ export function applyChanges(baseline,changes){
  return [...items.values()];
 }
 export function canManageSong(auth,song){
- return Boolean(auth?.sub&&song&&(song.ownerSub===auth.sub||auth.isAdmin));
+ return Boolean(auth?.sub&&auth?.username&&song&&(song.ownerSub===auth.sub||auth.isAdmin));
 }
 export function canManageSession(auth,session){
- return Boolean(auth?.sub&&session?.ownerSub===auth.sub);
+ return Boolean(auth?.sub&&auth?.username&&session?.ownerSub===auth.sub);
 }
 export async function loadProfile(c){return apiFetch(c,"/profile");}
 export async function setProfile(c,username){
