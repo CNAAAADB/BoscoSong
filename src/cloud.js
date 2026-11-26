@@ -46,7 +46,7 @@ export async function beginLogin(c,signup=false){
  if(hash)sessionStorage.setItem("boscosong.login.hash",hash);
  const digest=await crypto.subtle.digest("SHA-256",utf8.encode(verifier));
  const params=new URLSearchParams({
-  client_id:c.clientId,response_type:"code",scope:"openid email profile",
+  client_id:c.clientId,response_type:"code",scope:"openid email profile",lang:"es",
   redirect_uri:callback(),state,code_challenge_method:"S256",
   code_challenge:base64url(digest)
  });
