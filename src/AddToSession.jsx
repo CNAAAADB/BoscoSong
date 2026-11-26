@@ -6,7 +6,7 @@ import {sessionWithSong,containsSessionSong} from "./sessionEntries.js";
 
 
 export default function AddToSession({
- song,auth,config,sessions,onClose,onSaved,onViewSession,onLogin,onSignup,
+ song,auth,config,sessions,onClose,onSaved,onViewSession,onLogin,onSignup,onPersistSession,
  transpose=0,speed=2,tempo=76
 }){
  const [newTitle,setNewTitle]=useState("");
@@ -33,7 +33,7 @@ export default function AddToSession({
   }catch(e){setError(e.message);return;}
   setSaving(target?.id||"new");setError("");
   try{
-   const stored=await saveSession(config,payload);
+   const stored=await (onPersistSession?onPersistSession(payload):saveSession(config,payload));
    onSaved(stored);
    setSuccess(stored);
   }catch(e){setError("No se pudo guardar la canción: "+e.message);}
