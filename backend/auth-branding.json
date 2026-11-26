@@ -1,0 +1,120 @@
+{
+  "note": "BoscoSong auth pages use AWS Cognito managed login (branding version 2); settings are applied to the existing Cognito managed branding style. This is a deployment record, not an AWS credential.",
+  "region": "eu-west-1",
+  "stack": "BoscoSongPilot",
+  "poolId": "eu-west-1_zcbTtfKM3",
+  "clientId": "16j3qgkn9nc0rnm61ln0tb8h5m",
+  "styleId": "51fb5eb6-9816-48bf-bcb9-eab0c544b583",
+  "locale": "es",
+  "palette": {
+    "navy": "#252b57",
+    "gold": "#d0a73f",
+    "cream": "#e6d7aa"
+  },
+  "appliedSettings": {
+    "components": {
+      "pageBackground": {
+        "image": {
+          "enabled": false
+        },
+        "lightMode": {
+          "color": "e6d7aaff"
+        }
+      },
+      "form": {
+        "borderRadius": 18,
+        "lightMode": {
+          "backgroundColor": "fffdf8ff",
+          "borderColor": "d0a73fff"
+        }
+      },
+      "pageText": {
+        "lightMode": {
+          "bodyColor": "252b57ff",
+          "headingColor": "252b57ff",
+          "descriptionColor": "252b57ff"
+        }
+      },
+      "primaryButton": {
+        "lightMode": {
+          "defaults": {
+            "backgroundColor": "252b57ff",
+            "textColor": "ffffffff"
+          },
+          "hover": {
+            "backgroundColor": "d0a73fff",
+            "textColor": "252b57ff"
+          },
+          "active": {
+            "backgroundColor": "252b57ff",
+            "textColor": "ffffffff"
+          }
+        }
+      },
+      "secondaryButton": {
+        "lightMode": {
+          "defaults": {
+            "backgroundColor": "fffdf8ff",
+            "borderColor": "252b57ff",
+            "textColor": "252b57ff"
+          },
+          "hover": {
+            "backgroundColor": "e6d7aaff",
+            "borderColor": "252b57ff",
+            "textColor": "252b57ff"
+          }
+        }
+      },
+      "alert": {
+        "borderRadius": 12
+      }
+    },
+    "componentClasses": {
+      "input": {
+        "borderRadius": 10,
+        "lightMode": {
+          "defaults": {
+            "backgroundColor": "ffffffff",
+            "borderColor": "d0a73fff"
+          },
+          "placeholderColor": "696c7fff"
+        }
+      },
+      "buttons": {
+        "borderRadius": 10
+      },
+      "focusState": {
+        "lightMode": {
+          "borderColor": "d0a73fff"
+        }
+      },
+      "inputLabel": {
+        "lightMode": {
+          "textColor": "252b57ff"
+        }
+      },
+      "link": {
+        "lightMode": {
+          "defaults": {
+            "textColor": "252b57ff"
+          },
+          "hover": {
+            "textColor": "94721fff"
+          }
+        }
+      }
+    },
+    "categories": {
+      "global": {
+        "colorSchemeMode": "LIGHT",
+        "spacingDensity": "REGULAR",
+        "pageHeader": {
+          "enabled": false
+        },
+        "pageFooter": {
+          "enabled": false
+        }
+      }
+    }
+  }
+}
