@@ -149,7 +149,7 @@ export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,c
         </div>
         <div className="sessionEntrySettings">
          <label>Tono <span><button onClick={()=>updateEntry(index,{transpose:Math.max(-24,entry.transpose-1)})} aria-label="Bajar medio tono">−</button><strong>{entry.transpose>0?"+":""}{entry.transpose/2} tonos</strong><button onClick={()=>updateEntry(index,{transpose:Math.min(24,entry.transpose+1)})} aria-label="Subir medio tono">+</button></span></label>
-         <label>Velocidad <select value={speedChoices.includes(Number(entry.speed))?Number(entry.speed):2} onChange={e=>updateEntry(index,{speed:Number(e.target.value)})}>
+         <label>Velocidad <select value={Number(entry.speed)} onChange={e=>updateEntry(index,{speed:Number(e.target.value)})}>{!speedChoices.includes(Number(entry.speed))&&<option value={Number(entry.speed)}>{formatScrollRate(entry.speed)}× (personalizada)</option>}
           {speedChoices.map(v=><option key={v} value={v}>{formatScrollRate(v)}×</option>)}
          </select></label>
          <label>Tempo <input type="number" min="40" max="240" value={entry.tempo} onChange={e=>updateEntry(index,{tempo:Math.min(240,Math.max(40,Number(e.target.value)||76))})}/></label>
