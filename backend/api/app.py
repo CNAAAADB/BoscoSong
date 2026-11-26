@@ -9,6 +9,7 @@ import json
 import os
 import re
 import secrets
+import unicodedata
 from datetime import datetime, timezone
 from decimal import Decimal
 import boto3
@@ -18,7 +19,8 @@ from botocore.exceptions import ClientError
 table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
 SONG_ID = re.compile(r"^[A-Za-z0-9._:-]{1,160}$")
 SESSION_ID = re.compile(r"^BS-[A-F0-9]{12}$")
-DISPLAY_NAME = re.compile(r"^[\wÀ-ÿ .'-]{2,40}$", re.UNICODE)
+HANDLE_RE = re.compile(r"^[a-záéíóúüñ][a-záéíóúüñ0-9_]{2,23}$")
+RESERVED_USERNAMES = {"admin", "administrador", "boscosong", "soporte", "support", "root", "system", "sistema", "moderador", "moderator", "staff", "aws", "cognito"}
 MIN_SPEED, MAX_SPEED = 0.02, 5.0
 
 
@@ -63,23 +65,85 @@ def user_claims(event):
     return uid, "editors" in groups, claims
 
 
+def get_user_profile(uid):
+    return table.get_item(Key={"id": "USER#" + uid}, ConsistentRead=True).get("Item") or {}
+
+
 def profile_name(uid, claims):
-    row = table.get_item(Key={"id": "USER#" + uid}).get("Item")
-    if row and row.get("name"):
-        return row["name"]
+    profile = get_user_profile(uid)
+    if profile.get("username"):
+        return profile["username"]
+    if profile.get("name"):
+        return profile["name"]
     raw = claims.get("username") or claims.get("preferred_username") or ("Usuario " + uid[:8])
     return str(raw).split("@", 1)[0][:40].strip() or ("Usuario " + uid[:8])
 
 
-def clean_name(name):
-    name = str(name or "").strip()
-    if not DISPLAY_NAME.fullmatch(name):
-        raise ValueError("El nombre debe tener de 2 a 40 caracteres; usa letras, números, espacios o guiones")
-    return name
-
-
 def profile_response(uid, claims):
-    return {"userId": uid, "displayName": profile_name(uid, claims)}
+    profile = get_user_profile(uid)
+    username = profile.get("username") or None
+    return {"userId": uid, "username": username, "displayName": username or profile_name(uid, claims),
+            "usernameRequired": username is None}
+
+
+def normalize_username(value):
+    username = unicodedata.normalize("NFKC", str(value or "")).casefold().strip()
+    if not HANDLE_RE.fullmatch(username):
+        raise ValueError("Elige entre 3 y 24 caracteres: empieza por una letra y usa letras, números o guion bajo.")
+    if username in RESERVED_USERNAMES:
+        raise ValueError("Este nombre está reservado. Elige otro.")
+    return username
+
+
+class UsernameTakenError(Exception):
+    pass
+
+
+def claim_username(uid, claims, requested):
+    username = normalize_username(requested)
+    profile = get_user_profile(uid)
+    if profile.get("username"):
+        if profile["username"] != username:
+            raise PermissionError("Tu nombre de usuario ya está asignado y no puede modificarse.")
+        return profile_response(uid, claims)
+    now = utc_now()
+    # Both records are committed atomically, including under simultaneous requests.
+    ddb = boto3.client("dynamodb")
+    try:
+        ddb.transact_write_items(TransactItems=[
+            {"Put": {
+                "TableName": table.name,
+                "Item": {"id": {"S": "USERNAME#" + username},
+                         "ownerSub": {"S": uid}, "createdAt": {"S": now}},
+                "ConditionExpression": "attribute_not_exists(id)"
+            }},
+            {"Put": {
+                "TableName": table.name,
+                "Item": {"id": {"S": "USER#" + uid},
+                         "ownerSub": {"S": uid},
+                         "username": {"S": username}, "name": {"S": username},
+                         "updatedAt": {"S": now}},
+                "ConditionExpression": "attribute_not_exists(username)"
+            }},
+        ])
+    except ClientError as ex:
+        if ex.response.get("Error", {}).get("Code") in ("TransactionCanceledException", "ConditionalCheckFailedException"):
+            latest = get_user_profile(uid)
+            if latest.get("username") == username:
+                return profile_response(uid, claims)
+            if latest.get("username"):
+                raise PermissionError("Tu nombre de usuario ya está asignado y no puede modificarse.")
+            raise UsernameTakenError("Ese nombre de usuario ya está ocupado. Prueba con otro.")
+        raise
+    return {"userId": uid, "username": username, "displayName": username, "usernameRequired": False}
+
+
+def require_username(uid):
+    profile = get_user_profile(uid)
+    if not profile.get("username"):
+        raise PermissionError("Antes de publicar canciones o sesiones, debes elegir un nombre de usuario único.")
+    return profile["username"]
+
 
 
 def parse_song(data, identifier, owner_id, owner_name):
@@ -274,10 +338,9 @@ def handler(event, context):
         if method == "GET" and path == "/profile":
             return send(200, profile_response(uid, claims))
         if method == "PUT" and path == "/profile":
-            name = clean_name(event_body(event).get("displayName"))
-            table.put_item(Item={"id": "USER#" + uid, "ownerSub": uid, "name": name, "updatedAt": utc_now()})
-            return send(200, {"userId": uid, "displayName": name})
-        name = profile_name(uid, claims)
+            requested = event_body(event).get("username")
+            return send(200, claim_username(uid, claims, requested))
+        name = require_username(uid)
         if method == "POST" and path == "/songs/batch":
             originals = event_body(event).get("songs", [])
             if not isinstance(originals, list) or not 1 <= len(originals) <= 20:
@@ -303,6 +366,8 @@ def handler(event, context):
             session = save_session(event_body(event), uid, name, identifier)
             return send(200, {"session": session})
         return send(404, {"message": "Ruta no encontrada"})
+    except UsernameTakenError as ex:
+        return send(409, {"message": str(ex), "code": "USERNAME_TAKEN"})
     except PermissionError as ex:
         return send(403, {"message": str(ex)})
     except (ValueError, TypeError, json.JSONDecodeError) as ex:
