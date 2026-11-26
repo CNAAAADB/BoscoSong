@@ -6,7 +6,7 @@ import {sessionWithSong,containsSessionSong} from "./sessionEntries.js";
 
 
 export default function AddToSession({
- song,auth,config,sessions,onClose,onSaved,onViewSession,onLogin,onSignup,onPersistSession,
+ song,auth,config,sessions,onClose,onSaved,onViewSession,onLogin,onSignup,onRequireUsername,onPersistSession,
  transpose=0,speed=2,tempo=76
 }){
  const [newTitle,setNewTitle]=useState("");
@@ -21,6 +21,7 @@ export default function AddToSession({
 
  const save=async(target)=>{
   if(!auth||!config){setError("Inicia sesión para añadir canciones a tus sesiones.");return;}
+  if(!auth.username){onRequireUsername?.();return;}
   const title=target?.title||newTitle.trim();
   if(!title){setError("Escribe el nombre de la nueva sesión.");return;}
   if(target&&!canManageSession(auth,target)){
@@ -58,7 +59,7 @@ export default function AddToSession({
      <button className="subtle" type="button" onClick={onClose}>Seguir con la canción</button>
      <button className="primary" type="button" onClick={()=>onViewSession(success.id)}>Ver sesión <ChevronRight size={16}/></button>
     </div>
-   </div>:!auth?<div className="sessionPickerLogin">
+   </div>:auth&&!auth.username?<div className="sessionPickerLogin"><LockKeyhole size={27}/><h3>Elige tu nombre de usuario</h3><p>Antes de crear o modificar sesiones, necesitas un nombre único para identificar tus canciones y sesiones.</p><div className="sessionPickerFoot"><button className="subtle" onClick={onClose}>Ahora no</button><button className="primary" onClick={onRequireUsername}>Elegir @usuario</button></div></div>:!auth?<div className="sessionPickerLogin">
     <LockKeyhole size={27}/>
     <h3>Organiza tus canciones</h3>
     <p>Inicia sesión para añadir esta canción a tus sesiones o crear una nueva. La consulta de canciones seguirá siendo pública.</p>
