@@ -80,7 +80,16 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
     }catch{}
     if(!alive)return;setSongs(local);setReady(true);
     let config=null;
-    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);const logged=await finishLogin(config);if(alive)setAuth(logged);if(location.hash.startsWith("#session=")&&alive)setTab("sessions");if(logged){try{const profile=await loadProfile(config);if(alive)setAuth(updateAuthProfile(profile.displayName));}catch(e){if(alive)setError("Perfil: "+e.message);}}}
+    try{config=await loadConfig();if(!alive)return;setCloudConfig(config);const logged=await finishLogin(config);if(alive)setAuth(logged);
+    if(logged&&alive){
+     try{
+      const requested=sessionStorage.getItem("boscosong.authReturnSong");
+      if(requested){
+       sessionStorage.removeItem("boscosong.authReturnSong");
+       setSelected(requested);setTab("songs");setShowSessionPicker(true);
+      }
+     }catch{}
+    }if(location.hash.startsWith("#session=")&&alive)setTab("sessions");if(logged){try{const profile=await loadProfile(config);if(alive)setAuth(updateAuthProfile(profile.displayName));}catch(e){if(alive)setError("Perfil: "+e.message);}}}
     catch(e){if(alive)setError("Inicio de sesión: "+e.message);}
     try{
       const publicSongs=await loadPublicCatalog();
@@ -205,6 +214,11 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
  async function refreshSessions(){
   if(!cloudConfig)return;
   try{setSessions(await listSessions(cloudConfig));}catch(e){setError("No se pudieron actualizar las sesiones: "+e.message);}
+ }
+ function authForCurrentSong(signup=false){
+  if(!cloudConfig){setError("El acceso todavía no está disponible");return;}
+  try{if(song?.id)sessionStorage.setItem("boscosong.authReturnSong",song.id);}catch{}
+  beginLogin(cloudConfig,signup).catch(e=>setError(e.message));
  }
  async function changeDisplayName(){
   if(!cloudConfig||!auth)return;
@@ -343,8 +357,8 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
   song={song} auth={auth} config={cloudConfig} sessions={sessions}
   transpose={shift} speed={scrollRate} tempo={tempo}
   onClose={()=>setShowSessionPicker(false)}
-  onLogin={()=>beginLogin(cloudConfig).catch(e=>setError(e.message))}
-  onSignup={()=>beginLogin(cloudConfig,true).catch(e=>setError(e.message))}
+  onLogin={()=>authForCurrentSong(false)}
+  onSignup={()=>authForCurrentSong(true)}
   onSaved={stored=>setSessions(previous=>[stored,...previous.filter(x=>x.id!==stored.id)])}
   onViewSession={id=>{setShowSessionPicker(false);setSessionFocusId(id);setSessionContext(null);setTab("sessions");setPlaying(false);}}
  />}
