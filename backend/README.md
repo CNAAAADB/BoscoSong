@@ -1,94 +1,52 @@
-# BoscoSong AWS · Estado de producción piloto
+# BoscoSong · Backend compartido en AWS
 
-**Desplegado en eu-west-1:** pila CloudFormation `BoscoSongPilot`, Cognito, Lambda, API Gateway HTTP y tabla DynamoDB PAY_PER_REQUEST. El frontend de GitHub Pages ya utiliza la API real mediante `public/config.json`.
+**Pila desplegada:** `BoscoSongPilot` en `eu-west-1`.
 
-- **Plantilla autoritativa del despliegue real:** `backend/deployed-stack.json`.
-- **Importante:** el archivo `backend/template.yaml` es un borrador SAM anterior; no lo ejecutes sobre la pila `BoscoSongPilot`, ya que la sustituirías por una topología diferente.
-- **Inicio de sesión:** Cognito permite únicamente usuarios creados/invitados por un administrador. La pertenencia al grupo `editors` permite publicar, editar o borrar canciones. Actualmente no se ha invitado ninguna cuenta.
-- **Límites de coste:** API HTTP limitada a 6 solicitudes por segundo y ráfagas de 12. Lambda 128 MB y DynamoDB bajo demanda, sin instancias permanentes. Vigilar uso y presupuestos de AWS.
-- **Comprobaciones realizadas:** GET /changes => 200; invocación sin grupo de edición => 403; escritura y lectura temporales => 200 y limpieza posterior.
-- **Ámbito actual:** canciones públicas y cambios compartidos; las sesiones siguen siendo locales o compartidas por enlace completo, no hay todavía un índice global de sesiones.
+El sitio web público se aloja en GitHub Pages; utiliza Cognito para registro e inicio de sesión (correo verificado), API Gateway HTTP para llamadas autenticadas, Lambda Python para autorización y DynamoDB bajo demanda para persistencia.
 
-## Invitación del primer editor
+## Cuentas y permisos
 
-Desde la consola AWS en **Cognito → User pools → BoscoSong-Editors-Pilot**, crea/invita al usuario con su correo real y añádelo al grupo `editors`. No introduzcas contraseñas ni secretos en GitHub ni en el chat. La primera entrada utiliza la interfaz de Cognito y el cambio de contraseña inicial.
+- Los usuarios pueden registrarse y confirmar su correo desde Cognito.
+- El inicio de sesión usa Authorization Code + PKCE y tokens de acceso de corta duración; no se guardan contraseñas en GitHub.
+- Cada usuario elige un nombre visible que queda almacenado en una fila `USER#sub`.
+- Nuevas canciones (`usr-...`) y sesiones (`BS-...`) llevan `ownerSub` de un token Cognito validado y `ownerName` para visualización. Los nombres y etiquetas de autor los fija Lambda, no el cliente.
+- Las canciones y sesiones solo pueden modificarse por su propietario; el grupo `editors` conserva permisos administrativos de canciones del catálogo histórico y moderación.
+- Los demás visitantes pueden consultar canciones y sesiones. Los ajustes personales de un visitante no modifican los valores compartidos por el creador.
 
-## Mantenimiento
+## Endpoints
 
-Los cambios de infraestructura deben hacerse actualizando `backend/deployed-stack.json` y la pila CloudFormation correspondiente. No edites los recursos por separado, para evitar discrepancias con la plantilla declarativa.
+| Método | Ruta | Acceso |
+|---|---|---|
+| GET | `/changes` | Público |
+| GET | `/sessions` | Público |
+| GET | `/sessions/{id}` | Público |
+| GET / PUT | `/profile` | Usuario autenticado |
+| PUT / DELETE | `/songs/{id}` | Propietario o administrador |
+| POST | `/songs/batch` | Usuario autenticado; IDs nuevos |
+| POST | `/sessions` | Usuario autenticado |
+| PUT | `/sessions/{id}` | Propietario de la sesión |
 
----
+El transporte y la velocidad se guardan por canción en cada sesión. La API revisa los rangos y utiliza condiciones de DynamoDB para evitar sobrescrituras de otros usuarios.
 
-# Referencia histórica del planteamiento AWS SAM
+## Infraestructura y mantenimiento
 
-The static GitHub Pages site is publicly readable. The existing 1,419-song catalog is distributed as `public/catalog/*.json`. Only **approved Cognito editors** can publish, edit or delete songs, and every change is checked server-side.
+- **Definición declarativa real:** `backend/deployed-stack.json`.
+- **Fuente Lambda:** `backend/api/app.py`.
+- `backend/template.yaml` es un borrador SAM histórico, **no utilizarlo para actualizar esta pila**.
+- DynamoDB usa facturación PAY_PER_REQUEST y API Gateway está limitada a 6 solicitudes por segundo, ráfagas de 12.
+- La cuenta AWS puede generar costes; supervisar consumo, invocaciones y uso de Cognito.
+- El catálogo inicial de 1.419 canciones estático continúa en GitHub Pages; los cambios y canciones añadidas se almacenan en DynamoDB.
+- Las sesiones creadas en versiones antiguas y almacenadas únicamente en un navegador no se publican automáticamente; conservar su JSON para migración.
 
-## Infrastructure
+## Comprobación de autorización
 
-- Cognito User Pool: no public self-registration, hosted sign-in with Authorization Code + PKCE; editor accounts are invited by the administrator.
-- API Gateway HTTP API: GET `/changes` is public; PUT `/songs/{id}`, DELETE `/songs/{id}`, and POST `/songs/batch` require a valid JWT.
-- Lambda: additionally verifies membership in Cognito group `editors`.
-- DynamoDB on-demand: holds edited/new songs and deletion markers, while the bulk initial catalog stays in static JSON. This avoids storing the same 2.9 MB repeatedly and keeps test costs low.
-- No access keys or secret credentials are embedded in the frontend.
+Pruebas realizadas contra Lambda y DynamoDB con registros temporales:
 
-**The AWS resources do not exist until you deploy this template.** The GitHub frontend can already read the static catalog, but publishing controls remain disabled until the API is configured.
+- Creador: guardar canción y sesión = autorizado.
+- Otro usuario: editar/borrar canción ajena = 403.
+- Otro usuario: editar sesión ajena = 403.
+- Consulta pública de sesión = permitida.
+- Etiqueta de autor = nombre del perfil guardado, ignorando etiquetas `@...` falsas.
+- Los registros de prueba se eliminaron después.
 
-## Deploy from a limited-permission AWS identity
-
-Use an IAM deployment role with the minimum necessary permissions for CloudFormation, Lambda, API Gateway, Cognito, DynamoDB, IAM (service role creation) and S3 (SAM artifact upload). Do not deploy from the AWS root identity.
-
-Install AWS CLI and SAM CLI locally. In `backend/` run:
-
-```bash
-sam build --template-file template.yaml
-sam deploy --guided --stack-name BoscoSongPilot --region eu-west-1 --capabilities CAPABILITY_IAM
-```
-
-Save the stack outputs `ApiBase`, `CognitoDomain`, `ClientId`, and `UserPoolId`. Configure **only public identifiers** in `public/config.json`:
-
-```json
-{
-  "apiBase": "https://YOUR_API_ID.execute-api.eu-west-1.amazonaws.com",
-  "cognitoDomain": "YOUR_DOMAIN.auth.eu-west-1.amazoncognito.com",
-  "clientId": "YOUR_USER_POOL_CLIENT_ID"
-}
-```
-
-Commit this file to GitHub. Github Pages will rebuild and show **Iniciar sesión**.
-
-Do not store passwords, IAM access keys, client secrets or refresh tokens in GitHub. The PKCE login uses a public Cognito App Client without a secret.
-
-## Invite editors (no open registration)
-
-From a properly authorized AWS identity:
-
-```bash
-aws cognito-idp admin-create-user --region eu-west-1 \
-  --user-pool-id YOUR_USER_POOL_ID \
-  --username editor@example.org \
-  --user-attributes Name=email,Value=editor@example.org Name=email_verified,Value=true
-
-aws cognito-idp admin-add-user-to-group --region eu-west-1 \
-  --user-pool-id YOUR_USER_POOL_ID \
-  --username editor@example.org \
-  --group-name editors
-```
-
-Cognito sends an invitation / temporary password according to its configured email delivery. The editor must complete the password change when first signing in.
-
-**Do not create self-registration or make the editor group public**. Reading the catalog is open, but every mutation checks both the JWT and Cognito group membership on the server.
-
-## How data is shared
-
-1. Page load: fetch the 1,419-song baseline from static JSON on GitHub Pages.
-2. If AWS is configured, fetch GET `/changes` and overlay edits and deletion markers.
-3. Editing or uploading songs: protected API writes to DynamoDB and responds only after success.
-4. Deleting a baseline song: API records a deletion marker. Public readers no longer see it even though its historical version remains in source control.
-
-The public catalog contains lyrics. Confirm appropriate permissions before sharing it publicly.
-
-## Costs and security
-
-The pilot uses only serverless resources with usage-based charges. Set an AWS Budget / cost alert, keep requests and public exposure controlled, monitor Lambda CloudWatch metrics, and disable the stack when testing ends. **On-demand does not mean free.**
-
-The permissions and UI are implemented in source, but deployment and editor invitations must be carried out with a scoped AWS identity before users can authenticate and publish.
+La identidad de Cognito es verificada antes de llegar a las rutas protegidas de Lambda por el autorizador JWT de API Gateway. Las pruebas directas de Lambda validan además la lógica de permisos del backend.
