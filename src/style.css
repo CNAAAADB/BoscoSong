@@ -231,3 +231,135 @@ button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
  .playback{gap:5px}
  .playback label{font-size:9px}
 }
+
+
+/* Song reader accessibility: only lyrics and chord symbols scale. */
+.reader .lyrics{font-size:var(--song-font-size,22px)!important}
+.fontControls{display:flex;align-items:center;gap:6px;flex:none}
+.fontControls>span{font-size:12px;color:var(--muted);font-weight:600}
+.fontControls button{border:1px solid var(--border);background:#fffaf0;color:var(--text);border-radius:8px;min-width:32px;height:31px;padding:3px 7px;font-weight:800;font-size:13px;line-height:1}
+.fontControls button:hover:not(:disabled){background:#f3e8c7}
+.fontControls strong{font-size:11px;min-width:34px;text-align:center;color:var(--text)}
+.speedControl{display:flex;align-items:center;gap:9px;min-width:0}
+.speedControl>span{display:flex;gap:5px;align-items:center;white-space:nowrap;font-size:12px}
+.speedControl strong{color:var(--text);font-variant-numeric:tabular-nums}
+.speedControl input[type=range]{min-width:75px;width:112px;max-width:100%;accent-color:var(--gold,#d0a73f);cursor:pointer}
+.presentationControls{display:none}
+.reader.presentationMode,.layout .reader.presentationMode{
+ position:fixed!important;
+ inset:0!important;
+ z-index:10000!important;
+ display:flex!important;
+ flex-direction:column!important;
+ width:100vw!important;
+ height:100vh!important;
+ height:100dvh!important;
+ min-height:0!important;
+ max-height:none!important;
+ max-width:none!important;
+ padding:0!important;
+ margin:0!important;
+ overflow:hidden!important;
+ background:var(--canvas,#f8f5eb)!important;
+ border:0!important;
+ border-radius:0!important;
+}
+.reader.presentationMode:fullscreen{width:100%!important;height:100%!important}
+.reader.presentationMode .readerHead,
+.reader.presentationMode .toolbar,
+.reader.presentationMode .playback{display:none!important}
+.reader.presentationMode .presentationControls{
+ display:flex!important;
+ align-items:center;
+ flex:0 0 auto;
+ gap:12px;
+ padding:10px 16px;
+ padding-top:calc(10px + env(safe-area-inset-top,0px));
+ min-height:58px;
+ background:#fffdf8;
+ border-bottom:1px solid var(--border,#e6d7aa);
+ color:var(--text,#252b57);
+ width:100%;
+}
+.presentationControls .transpose{display:flex;align-items:center;gap:6px;flex:none}
+.presentationControls .transpose strong{
+ display:block;
+ min-width:92px;
+ text-align:center;
+ font-size:12px;
+ font-variant-numeric:tabular-nums;
+ white-space:nowrap;
+}
+.presentationControls .transpose button,
+.presentationControls .presentationPlay,
+.presentationControls .presentationExit{
+ display:grid;
+ place-items:center;
+ flex:none;
+ border:1px solid var(--border,#e6d7aa);
+ background:#fffaf0;
+ color:#252b57;
+ border-radius:10px;
+ width:38px;
+ height:38px;
+ padding:0;
+ cursor:pointer;
+}
+.presentationControls .presentationPlay{
+ background:var(--brand,#252b57);
+ color:#fff;
+ border-color:var(--brand,#252b57);
+}
+.presentationControls .presentationExit{margin-left:auto}
+.presentationControls .speedControl{
+ display:flex;
+ flex:1 1 240px;
+ justify-content:center;
+ gap:12px;
+ min-width:90px;
+}
+.presentationControls .speedControl>span{font-size:12px;color:var(--text,#252b57)}
+.presentationControls .speedControl input{width:min(28vw,250px);min-width:74px;max-width:250px}
+.reader.presentationMode .songScroll{
+ display:block!important;
+ flex:1 1 0!important;
+ min-height:0!important;
+ width:100%!important;
+ height:auto!important;
+ max-height:none!important;
+ overflow-y:auto!important;
+ overflow-x:auto!important;
+ overscroll-behavior:contain;
+ -webkit-overflow-scrolling:touch;
+ padding:30px clamp(16px,4vw,72px) calc(42px + env(safe-area-inset-bottom,0px))!important;
+}
+.reader.presentationMode .lyrics{margin:0 auto;max-width:1200px}
+.reader.presentationMode .songLine{overflow-x:visible}
+@media(max-width:700px){
+ .fontControls{gap:4px}
+ .fontControls>span{font-size:10px}
+ .fontControls button{height:27px;min-width:27px;padding:2px 5px;font-size:11px}
+ .fontControls strong{min-width:30px;font-size:10px}
+ .reader .playback .speedControl{flex:1 1 auto;min-width:0;gap:3px}
+ .reader .playback .speedControl>span{display:flex;flex-direction:row;gap:3px;align-items:center;font-size:9px}
+ .reader .playback .speedControl input{width:100%;min-width:0;max-width:135px}
+ .reader.presentationMode .presentationControls{gap:6px;padding:7px 9px;padding-top:calc(7px + env(safe-area-inset-top,0px));min-height:52px}
+ .presentationControls .transpose{gap:4px}
+ .presentationControls .transpose button,
+ .presentationControls .presentationPlay,
+ .presentationControls .presentationExit{height:34px;width:34px;border-radius:8px}
+ .presentationControls .transpose strong{min-width:67px;font-size:10px}
+ .presentationControls .speedControl{gap:5px;flex:1 1 auto;min-width:70px}
+ .presentationControls .speedControl>span{font-size:10px}
+ .presentationControls .speedControl input{width:100%;min-width:45px}
+ .reader.presentationMode .songScroll{padding:22px 13px calc(28px + env(safe-area-inset-bottom,0px))!important}
+}
+@media(max-width:390px){
+ .reader.presentationMode .presentationControls{gap:4px;padding-left:5px;padding-right:5px}
+ .presentationControls .transpose button,
+ .presentationControls .presentationPlay,
+ .presentationControls .presentationExit{height:31px;width:31px}
+ .presentationControls .transpose strong{min-width:58px;font-size:9px}
+ .presentationControls .speedControl{min-width:52px}
+ .presentationControls .speedControl>span{flex-direction:column;gap:0;line-height:1.15;font-size:9px}
+}
