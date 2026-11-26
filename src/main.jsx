@@ -7,6 +7,7 @@ import {transposeChord,chordTones} from "./music.js";
 import {extractPositionedSong,parseBracketedText} from "./importer.js";
 import SessionsPanel from "./SessionsPanel.jsx";
 import {advanceScroll,sliderToScrollRate,scrollRateToSlider,formatScrollRate} from "./autoscroll.js";
+import {lyricRuns} from "./lyricRuns.js";
 import {loadConfig,loadPublicCatalog,loadChanges,applyChanges,currentAuth,finishLogin,beginLogin,logout,saveSong,saveSongBatch,deleteSong} from "./cloud.js";
 
 
@@ -22,7 +23,43 @@ const LATIN={Do:"C",Re:"D",Mi:"E",Fa:"F",Sol:"G",La:"A",Si:"B"};
 function normalizeRoot(root){return FLAT[root]||LATIN[root]||root;}
 function shiftRoot(root,steps){const n=normalizeRoot(root);const pos=NOTES.indexOf(n);return pos<0?root:NOTES[(pos+steps%12+12)%12];}
 function PianoKeys({symbol}){const tones=chordTones(symbol);const white=["C","D","E","F","G","A","B"];const offsets=[0,1,2,3,4,5,6];return <div className="pianoWrap"><div className="pianoLabel">Acorde: <strong>{symbol}</strong> · notas resaltadas en ambas manos</div><div className="keyboard">{Array.from({length:14},(_,i)=>{const note=white[i%7],pos=NOTES.indexOf(note);return <div key={i} className={"whiteKey "+(tones.includes(pos)?"activeKey":"")}><small>{i===0||i===7?"C":""}</small></div>})}{Array.from({length:14},(_,i)=>{const note=white[i%7];if(note==="E"||note==="B")return null;const pos=NOTES.indexOf(note+"#");return <div key={i} className={"blackKey "+(tones.includes(pos)?"activeBlack":"")} style={{left:`calc((100% / 14) * ${i+1} - (100% / 14) * .28)`}}/>})}</div><p className="hint">Visualización orientativa de las notas del acorde, no una digitación obligatoria.</p></div>}
-function ChordLine({line,shift,showChords,onAdd,onEdit,editable=false}){const chars=[...line.text];const grouped=new Map();for(const ch of line.chords||[]){const idx=Math.min(Math.max(ch.index,0),chars.length);if(!grouped.has(idx))grouped.set(idx,[]);grouped.get(idx).push(ch);}return <div className={"songLine "+(!line.text?"blankLine":"")}><div className="lineGlyphs">{Array.from({length:chars.length+1},(_,i)=><span className="glyph" key={i}>{showChords&&grouped.has(i)&&<span className="chordColumn">{grouped.get(i).map((ch,n)=><button key={n} className="chord" onClick={()=>editable&&onEdit(ch)} title={editable?"Editar acorde":transposeChord(ch.symbol,shift)}>{transposeChord(ch.symbol,shift)}</button>)}</span>}{i<chars.length?<span className={editable?"editableChar":""} onClick={()=>editable&&onAdd(i)}>{chars[i]===" "?"\u00a0":chars[i]}</span>:editable?<button className="endAnchor" onClick={()=>onAdd(i)}>+</button>:null}</span>)}</div></div>;}
+function ChordLine({line,shift,showChords,onAdd,onEdit,editable=false}){
+ const text=String(line.text||"");
+ const chars=Array.from(text);
+ const grouped=new Map();
+ for(const chord of line.chords||[]){
+  const idx=Math.min(Math.max(Math.trunc(chord.index||0),0),chars.length);
+  if(!grouped.has(idx))grouped.set(idx,[]);
+  grouped.get(idx).push(chord);
+ }
+ const runs=lyricRuns(text);
+ const renderGlyph=(index,value)=>{
+  const chords=showChords?grouped.get(index):null;
+  return <span className={"glyph"+(value===" "?" gapGlyph":"")} key={index}>
+   {chords?.length>0&&<span className="chordColumn">{chords.map((ch,n)=>
+    <button key={n} className="chord" onClick={()=>editable&&onEdit(ch)}
+     title={editable?"Editar acorde":transposeChord(ch.symbol,shift)}>{transposeChord(ch.symbol,shift)}</button>
+   )}</span>}
+   {index<chars.length?<span className={editable?"editableChar":""} onClick={()=>editable&&onAdd(index)}>{value===" "?"\u00a0":value}</span>
+    :editable?<button className="endAnchor" onClick={()=>onAdd(index)}>+</button>:null}
+  </span>;
+ };
+ const terminal=showChords&&grouped.has(chars.length)||editable?renderGlyph(chars.length,""):null;
+ return <div className={"songLine"+(!text?" blankLine":"")+(showChords?"":" noChords")}>
+  <div className="lineGlyphs">
+   {runs.map((run,runIndex)=>{
+    const last=runIndex===runs.length-1;
+    const contents=run.chars.map(({index,value})=>renderGlyph(index,value));
+    if(last&&terminal)contents.push(terminal);
+    return run.type==="word"
+     ?<span className="lyricWord" key={run.start}>{contents}</span>
+     :<React.Fragment key={run.start}><span className="lyricGap">{contents}</span><wbr/></React.Fragment>;
+   })}
+   {!runs.length&&terminal&&<span className="lyricWord">{terminal}</span>}
+  </div>
+ </div>;
+}
+
 function makeId(){return globalThis.crypto?.randomUUID?.()||Date.now()+"-"+Math.random();}
 function SpeedControl({rate,onChange,compact=false}){
  return <label className={"speedControl"+(compact?" speedCompact":"")}><span>Velocidad <strong>{formatScrollRate(rate)}×</strong></span><input type="range" min="0" max="100" step="1" value={scrollRateToSlider(rate)} onChange={e=>onChange(sliderToScrollRate(Number(e.target.value)))} aria-label="Velocidad del desplazamiento automático" aria-valuetext={formatScrollRate(rate)+" veces la velocidad base"} title="Permite un desplazamiento muy lento sin detenerse"/></label>;
