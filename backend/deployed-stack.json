@@ -31,7 +31,7 @@
           "email"
         ],
         "AdminCreateUserConfig": {
-          "AllowAdminCreateUserOnly": true
+          "AllowAdminCreateUserOnly": false
         },
         "Policies": {
           "PasswordPolicy": {
@@ -158,7 +158,7 @@
           ]
         },
         "Code": {
-          "ZipFile": "\"\"\"BoscoSong song-change API (Python 3.12 / DynamoDB).\n\nThe bundled public catalog is immutable static JSON; writes are stored as\noverrides/tombstones in DynamoDB. Only users in Cognito's editors group\nare allowed to mutate songs. HTTP API JWT authorizer runs before Lambda.\n\"\"\"\nimport base64\nimport json\nimport os\nimport re\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nimport boto3\nfrom boto3.dynamodb.conditions import Attr\n\ntable = boto3.resource(\"dynamodb\").Table(os.environ[\"TABLE_NAME\"])\nID_RE = re.compile(r\"^[a-zA-Z0-9._:-]{1,160}$\")\n\n\ndef reply(status, payload):\n    return {\n        \"statusCode\": status,\n        \"headers\": {\"content-type\": \"application/json; charset=utf-8\"},\n        \"body\": json.dumps(payload, ensure_ascii=False, default=lambda x: float(x) if isinstance(x, Decimal) else str(x)),\n    }\n\n\ndef require_editor(event):\n    claims = (\n        event.get(\"requestContext\", {})\n        .get(\"authorizer\", {})\n        .get(\"jwt\", {})\n        .get(\"claims\", {})\n    )\n    raw = claims.get(\"cognito:groups\", [])\n    if isinstance(raw, str):\n        try:\n            groups = json.loads(raw)\n        except ValueError:\n            groups = [x.strip() for x in raw.strip(\"[]\").split(\",\")]\n    else:\n        groups = raw\n    if \"editors\" not in groups:\n        raise PermissionError(\"Tu cuenta no tiene permiso de edici?n\")\n    return claims.get(\"sub\", \"editor\")\n\n\ndef parse_song(data, id_override=None):\n    if not isinstance(data, dict):\n        raise ValueError(\"La canci?n debe ser un objeto JSON\")\n    sid = str(id_override or data.get(\"id\", \"\"))\n    if not ID_RE.fullmatch(sid):\n        raise ValueError(\"ID de canci?n no v?lido\")\n    title = str(data.get(\"title\", \"\")).strip()\n    if not title or len(title) > 180:\n        raise ValueError(\"T?tulo obligatorio, m?ximo 180 caracteres\")\n    lines = data.get(\"lines\", [])\n    if not isinstance(lines, list) or len(lines) > 500:\n        raise ValueError(\"M?ximo 500 l?neas por canci?n\")\n    clean_lines = []\n    for line in lines:\n        if not isinstance(line, dict):\n            raise ValueError(\"Cada l?nea debe ser un objeto\")\n        text = str(line.get(\"text\", \"\"))\n        if len(text) > 2000:\n            raise ValueError(\"L?nea demasiado larga\")\n        chords = line.get(\"chords\", [])\n        if not isinstance(chords, list) or len(chords) > 40:\n            raise ValueError(\"M?ximo 40 acordes por l?nea\")\n        clean = []\n        for c in chords:\n            if not isinstance(c, dict) or not isinstance(c.get(\"index\"), int) or isinstance(c.get(\"index\"), bool):\n                raise ValueError(\"Posici?n del acorde no v?lida\")\n            idx = c[\"index\"]\n            symbol = str(c.get(\"symbol\", \"\")).strip()\n            if not 0 <= idx <= len(text) or not symbol or len(symbol) > 40:\n                raise ValueError(\"Posici?n o s?mbolo del acorde incorrecto\")\n            clean.append({\"index\": idx, \"symbol\": symbol})\n        clean_lines.append({\"text\": text, \"chords\": clean})\n    tags = data.get(\"tags\", [])\n    if not isinstance(tags, list) or len(tags) > 20:\n        raise ValueError(\"M?ximo 20 etiquetas\")\n    tempo = data.get(\"tempo\", 76)\n    if isinstance(tempo, bool) or not isinstance(tempo, (int, Decimal)) or not 20 <= tempo <= 300:\n        tempo = 76\n    return {\n        \"id\": sid,\n        \"title\": title,\n        \"category\": str(data.get(\"category\", \"Misa\"))[:80],\n        \"tags\": [str(tag)[:60] for tag in tags],\n        \"tempo\": int(tempo),\n        \"lines\": clean_lines,\n        \"reviewStatus\": str(data.get(\"reviewStatus\", \"pendiente\"))[:32],\n        \"section\": str(data.get(\"section\", \"\"))[:80],\n        \"sourcePages\": [int(page) for page in (data.get(\"sourcePages\") or [])[:30] if isinstance(page, int) and not isinstance(page, bool) and 0 < page <= 100000],\n        \"number\": int(data.get(\"number\", 0)) if isinstance(data.get(\"number\"), int) and not isinstance(data.get(\"number\"), bool) else 0,\n    }\n\n\ndef put_song(song, editor):\n    table.put_item(Item={\n        \"id\": \"SONG#\" + song[\"id\"],\n        \"song\": song,\n        \"deleted\": False,\n        \"updatedAt\": datetime.now(timezone.utc).isoformat(),\n        \"updatedBy\": editor,\n    })\n\n\ndef get_changes(event):\n    query = event.get(\"queryStringParameters\") or {}\n    start = None\n    if query.get(\"cursor\"):\n        try:\n            start = json.loads(base64.urlsafe_b64decode(query[\"cursor\"] + \"===\"))\n        except Exception:\n            return reply(400, {\"message\": \"Cursor no v?lido\"})\n    params = {\n        \"FilterExpression\": Attr(\"id\").begins_with(\"SONG#\"),\n        \"Limit\": 150,\n        \"ProjectionExpression\": \"id,song,deleted\",\n    }\n    if start:\n        params[\"ExclusiveStartKey\"] = start\n    result = table.scan(**params)\n    changes = [\n        {\n            \"id\": row[\"id\"][5:],\n            \"deleted\": row.get(\"deleted\", False),\n            **({\"song\": row[\"song\"]} if row.get(\"song\") else {}),\n        }\n        for row in result.get(\"Items\", [])\n    ]\n    key = result.get(\"LastEvaluatedKey\")\n    cursor = base64.urlsafe_b64encode(json.dumps(key).encode()).decode().rstrip(\"=\") if key else None\n    return reply(200, {\"items\": changes, \"cursor\": cursor})\n\n\ndef handler(event, context):\n    method = event.get(\"requestContext\", {}).get(\"http\", {}).get(\"method\", \"\")\n    path = event.get(\"rawPath\", \"\")\n    try:\n        if method == \"GET\" and path == \"/changes\":\n            return get_changes(event)\n        editor = require_editor(event)\n        if method == \"PUT\" and path.startswith(\"/songs/\"):\n            sid = event.get(\"pathParameters\", {}).get(\"id\", \"\")\n            song = parse_song(json.loads(event.get(\"body\") or \"{}\"), sid)\n            put_song(song, editor)\n            return reply(200, {\"ok\": True, \"id\": sid})\n        if method == \"DELETE\" and path.startswith(\"/songs/\"):\n            sid = event.get(\"pathParameters\", {}).get(\"id\", \"\")\n            if not ID_RE.fullmatch(sid):\n                return reply(400, {\"message\": \"ID no v?lido\"})\n            table.put_item(Item={\n                \"id\": \"SONG#\" + sid, \"deleted\": True,\n                \"updatedAt\": datetime.now(timezone.utc).isoformat(),\n                \"updatedBy\": editor,\n            })\n            return reply(200, {\"ok\": True, \"id\": sid})\n        if method == \"POST\" and path == \"/songs/batch\":\n            body = json.loads(event.get(\"body\") or \"{}\")\n            raw = body.get(\"songs\", [])\n            if not isinstance(raw, list) or not 1 <= len(raw) <= 20:\n                return reply(400, {\"message\": \"Carga entre 1 y 20 canciones\"})\n            songs = [parse_song(s) for s in raw]\n            with table.batch_writer(overwrite_by_pkeys=[\"id\"]) as batch:\n                for song in songs:\n                    batch.put_item(Item={\n                        \"id\": \"SONG#\" + song[\"id\"], \"song\": song, \"deleted\": False,\n                        \"updatedAt\": datetime.now(timezone.utc).isoformat(),\n                        \"updatedBy\": editor,\n                    })\n            return reply(200, {\"ok\": True, \"count\": len(songs)})\n        return reply(404, {\"message\": \"Ruta no encontrada\"})\n    except PermissionError as error:\n        return reply(403, {\"message\": str(error)})\n    except (ValueError, TypeError, json.JSONDecodeError) as error:\n        return reply(400, {\"message\": str(error)})\n"
+          "ZipFile": "\"\"\"BoscoSong: public songs/sessions and JWT-verified, owner-only mutations.\n\nThe original catalog lives in GitHub Pages; DynamoDB stores uploaded songs,\nedits/tombstones, user display names, and saved sessions. The author identity\nalways comes from verified Cognito JWT claims, never client-supplied owner fields.\n\"\"\"\nimport base64\nimport json\nimport os\nimport re\nimport secrets\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nimport boto3\nfrom boto3.dynamodb.conditions import Attr\nfrom botocore.exceptions import ClientError\n\ntable = boto3.resource(\"dynamodb\").Table(os.environ[\"TABLE_NAME\"])\nSONG_ID = re.compile(r\"^[A-Za-z0-9._:-]{1,160}$\")\nSESSION_ID = re.compile(r\"^BS-[A-F0-9]{12}$\")\nDISPLAY_NAME = re.compile(r\"^[\\wÀ-ÿ .'-]{2,40}$\", re.UNICODE)\nMIN_SPEED, MAX_SPEED = 0.02, 5.0\n\n\ndef utc_now():\n    return datetime.now(timezone.utc).isoformat()\n\n\ndef send(status, body):\n    return {\n        \"statusCode\": status,\n        \"headers\": {\"content-type\": \"application/json; charset=utf-8\",\n                    \"cache-control\": \"no-store\"},\n        \"body\": json.dumps(body, ensure_ascii=False, default=lambda x: float(x) if isinstance(x, Decimal) else str(x)),\n    }\n\n\ndef event_body(event):\n    raw = event.get(\"body\") or \"{}\"\n    if event.get(\"isBase64Encoded\"):\n        raw = base64.b64decode(raw).decode(\"utf-8\")\n    if len(raw.encode(\"utf-8\")) > 5_000_000:\n        raise ValueError(\"Archivo demasiado grande\")\n    obj = json.loads(raw)\n    if not isinstance(obj, dict):\n        raise ValueError(\"El cuerpo debe ser un objeto JSON\")\n    return obj\n\n\ndef user_claims(event):\n    claims = (event.get(\"requestContext\", {})\n              .get(\"authorizer\", {}).get(\"jwt\", {}).get(\"claims\", {}))\n    uid = claims.get(\"sub\")\n    if not isinstance(uid, str) or not uid or len(uid) > 160:\n        raise PermissionError(\"Inicia sesión para continuar\")\n    groups = claims.get(\"cognito:groups\", [])\n    if isinstance(groups, str):\n        try:\n            decoded = json.loads(groups)\n            groups = decoded if isinstance(decoded, list) else [str(decoded)]\n        except ValueError:\n            groups = [g.strip(\" []'\\\"\") for g in groups.split(\",\")]\n    return uid, \"editors\" in groups, claims\n\n\ndef profile_name(uid, claims):\n    row = table.get_item(Key={\"id\": \"USER#\" + uid}).get(\"Item\")\n    if row and row.get(\"name\"):\n        return row[\"name\"]\n    raw = claims.get(\"username\") or claims.get(\"preferred_username\") or (\"Usuario \" + uid[:8])\n    return str(raw).split(\"@\", 1)[0][:40].strip() or (\"Usuario \" + uid[:8])\n\n\ndef clean_name(name):\n    name = str(name or \"\").strip()\n    if not DISPLAY_NAME.fullmatch(name):\n        raise ValueError(\"El nombre debe tener de 2 a 40 caracteres; usa letras, números, espacios o guiones\")\n    return name\n\n\ndef profile_response(uid, claims):\n    return {\"userId\": uid, \"displayName\": profile_name(uid, claims)}\n\n\ndef parse_song(data, identifier, owner_id, owner_name):\n    if not SONG_ID.fullmatch(identifier):\n        raise ValueError(\"ID de canción inválido\")\n    title = str(data.get(\"title\", \"\")).strip()\n    if not title or len(title) > 180:\n        raise ValueError(\"Título obligatorio de hasta 180 caracteres\")\n    raw_lines = data.get(\"lines\", [])\n    if not isinstance(raw_lines, list) or len(raw_lines) > 500:\n        raise ValueError(\"Se admiten hasta 500 líneas\")\n    lines = []\n    for line in raw_lines:\n        if not isinstance(line, dict):\n            raise ValueError(\"Línea inválida\")\n        lyrics = str(line.get(\"text\", \"\"))\n        if len(lyrics) > 2000:\n            raise ValueError(\"Línea demasiado larga\")\n        chords = line.get(\"chords\", [])\n        if not isinstance(chords, list) or len(chords) > 40:\n            raise ValueError(\"Demasiados acordes en una línea\")\n        valid = []\n        for chord in chords:\n            if not isinstance(chord, dict) or type(chord.get(\"index\")) is not int:\n                raise ValueError(\"Posición de acorde inválida\")\n            index, symbol = chord[\"index\"], str(chord.get(\"symbol\", \"\")).strip()\n            if not 0 <= index <= len(lyrics) or not 0 < len(symbol) <= 40:\n                raise ValueError(\"Posición o símbolo de acorde inválido\")\n            valid.append({\"index\": index, \"symbol\": symbol})\n        lines.append({\"text\": lyrics, \"chords\": valid})\n    tags = data.get(\"tags\", [])\n    if not isinstance(tags, list) or len(tags) > 20:\n        raise ValueError(\"Demasiadas etiquetas\")\n    # Author tags are reserved; the API sets them from the verified identity.\n    normal_tags = [str(t).strip()[:60] for t in tags if str(t).strip() and not str(t).strip().startswith(\"@\")]\n    normal_tags.append(\"@\" + owner_name)\n    raw_tempo = data.get(\"tempo\", 76)\n    try:\n        tempo = max(20, min(300, int(raw_tempo)))\n    except (ValueError, TypeError):\n        tempo = 76\n    pages = data.get(\"sourcePages\") or []\n    if not isinstance(pages, list):\n        pages = []\n    return {\n        \"id\": identifier, \"title\": title, \"category\": str(data.get(\"category\") or \"Misa\")[:80],\n        \"tags\": normal_tags, \"tempo\": tempo, \"lines\": lines,\n        \"ownerSub\": owner_id, \"ownerName\": owner_name,\n        \"reviewStatus\": str(data.get(\"reviewStatus\", \"pendiente\"))[:32],\n        \"section\": str(data.get(\"section\", \"\"))[:80],\n        \"sourcePages\": [p for p in pages[:30] if type(p) is int and 0 < p < 100000],\n    }\n\n\ndef save_song(data, identifier, uid, admin, name):\n    if not SONG_ID.fullmatch(identifier):\n        raise ValueError(\"ID de canción inválido\")\n    current = table.get_item(Key={\"id\": \"SONG#\" + identifier}).get(\"Item\")\n    if current:\n        if current.get(\"ownerSub\") != uid and not admin:\n            raise PermissionError(\"Solo el autor puede modificar esta canción\")\n        owner_id = current.get(\"ownerSub\") or uid\n        owner_name = current.get(\"ownerName\") or name\n    else:\n        if not identifier.startswith(\"usr-\") and not admin:\n            raise PermissionError(\"Los nuevos archivos deben usar un identificador de usuario\")\n        owner_id, owner_name = uid, name\n    song = parse_song(data, identifier, owner_id, owner_name)\n    item = {\"id\": \"SONG#\" + identifier, \"song\": song, \"ownerSub\": owner_id,\n            \"ownerName\": owner_name, \"deleted\": False, \"updatedAt\": utc_now()}\n    # Atomic condition prevents two users racing to replace a fresh song.\n    kwargs = {\"Item\": item}\n    if not admin:\n        kwargs[\"ConditionExpression\"] = \"attribute_not_exists(id) OR ownerSub = :uid\"\n        kwargs[\"ExpressionAttributeValues\"] = {\":uid\": uid}\n    table.put_item(**kwargs)\n    return song\n\n\ndef delete_song(identifier, uid, admin, name):\n    if not SONG_ID.fullmatch(identifier):\n        raise ValueError(\"ID inválido\")\n    existing = table.get_item(Key={\"id\": \"SONG#\" + identifier}).get(\"Item\")\n    if not existing and not admin:\n        raise PermissionError(\"Esta canción no está publicada por tu cuenta\")\n    if existing and existing.get(\"ownerSub\") != uid and not admin:\n        raise PermissionError(\"Solo el autor puede eliminar esta canción\")\n    owner_id = (existing or {}).get(\"ownerSub\") or uid\n    kwargs = {\"Item\": {\"id\": \"SONG#\" + identifier, \"deleted\": True, \"ownerSub\": owner_id,\n                       \"ownerName\": (existing or {}).get(\"ownerName\") or name, \"updatedAt\": utc_now()}}\n    if not admin:\n        kwargs[\"ConditionExpression\"] = \"ownerSub = :uid\"\n        kwargs[\"ExpressionAttributeValues\"] = {\":uid\": uid}\n    table.put_item(**kwargs)\n\n\ndef scan_prefix(prefix, limit=150, cursor=None):\n    params = {\"FilterExpression\": Attr(\"id\").begins_with(prefix), \"Limit\": limit}\n    if cursor:\n        try:\n            params[\"ExclusiveStartKey\"] = json.loads(base64.urlsafe_b64decode(cursor + \"===\"))\n        except Exception as ex:\n            raise ValueError(\"Cursor inválido\") from ex\n    result = table.scan(**params)\n    key = result.get(\"LastEvaluatedKey\")\n    nxt = (base64.urlsafe_b64encode(json.dumps(key).encode()).decode().rstrip(\"=\")\n           if key else None)\n    return result.get(\"Items\", []), nxt\n\n\ndef session_payload(data, uid, name, previous=None, identifier=None):\n    title = str(data.get(\"title\", \"\")).strip()[:160]\n    if not title:\n        raise ValueError(\"La sesión necesita un nombre\")\n    entries = data.get(\"songs\")\n    if not isinstance(entries, list):\n        entries = [{\"songId\": key} for key in data.get(\"songIds\", [])]\n    if not 1 <= len(entries) <= 150:\n        raise ValueError(\"La sesión necesita de 1 a 150 canciones\")\n    songs = []\n    for entry in entries:\n        if not isinstance(entry, dict):\n            raise ValueError(\"Canción inválida en la sesión\")\n        sid = str(entry.get(\"songId\") or \"\")\n        if not SONG_ID.fullmatch(sid):\n            raise ValueError(\"ID de canción de sesión inválido\")\n        try:\n            transpose = int(entry.get(\"transpose\", 0))\n            speed = float(entry.get(\"speed\", 2))\n            tempo = int(entry.get(\"tempo\", 76))\n        except (ValueError, TypeError):\n            raise ValueError(\"Ajuste musical inválido\")\n        if not (-24 <= transpose <= 24 and MIN_SPEED <= speed <= MAX_SPEED and 40 <= tempo <= 240):\n            raise ValueError(\"Tono, velocidad o tempo fuera de rango\")\n        songs.append({\"songId\": sid, \"transpose\": transpose,\n                      \"speed\": Decimal(str(round(speed, 4))), \"tempo\": tempo})\n    now = utc_now()\n    return {\n        \"id\": identifier or \"BS-\" + secrets.token_hex(6).upper(),\n        \"title\": title, \"songIds\": [s[\"songId\"] for s in songs], \"songs\": songs,\n        \"ownerSub\": (previous or {}).get(\"ownerSub\") or uid,\n        \"ownerName\": (previous or {}).get(\"ownerName\") or name,\n        \"tags\": [\"@\" + ((previous or {}).get(\"ownerName\") or name)],\n        \"createdAt\": (previous or {}).get(\"createdAt\") or now, \"updatedAt\": now,\n        \"published\": True,\n    }\n\n\ndef save_session(data, uid, name, identifier=None):\n    previous = None\n    if identifier:\n        if not SESSION_ID.fullmatch(identifier):\n            raise ValueError(\"Código de sesión inválido\")\n        row = table.get_item(Key={\"id\": \"SESSION#\" + identifier}).get(\"Item\")\n        if not row:\n            raise ValueError(\"Sesión no encontrada\")\n        previous = row.get(\"session\") or {}\n        if row.get(\"ownerSub\") != uid:\n            raise PermissionError(\"Solo el creador puede modificar esta sesión\")\n    session = session_payload(data, uid, name, previous, identifier)\n    if not SESSION_ID.fullmatch(session[\"id\"]):\n        raise ValueError(\"Código inválido\")\n    item = {\"id\": \"SESSION#\" + session[\"id\"], \"ownerSub\": session[\"ownerSub\"], \"session\": session}\n    kwargs = {\"Item\": item, \"ConditionExpression\": \"attribute_not_exists(id)\" if not identifier else \"ownerSub = :uid\"}\n    if identifier:\n        kwargs[\"ExpressionAttributeValues\"] = {\":uid\": uid}\n    table.put_item(**kwargs)\n    return session\n\n\ndef handler(event, context):\n    method = event.get(\"requestContext\", {}).get(\"http\", {}).get(\"method\", \"\")\n    path = event.get(\"rawPath\", \"\")\n    params = event.get(\"pathParameters\") or {}\n    try:\n        if method == \"GET\" and path == \"/changes\":\n            rows, cursor = scan_prefix(\"SONG#\", 150, (event.get(\"queryStringParameters\") or {}).get(\"cursor\"))\n            return send(200, {\"items\": [{\"id\": x[\"id\"][5:], \"deleted\": x.get(\"deleted\", False),\n                                       **({\"song\": x[\"song\"]} if x.get(\"song\") else {})}\n                                      for x in rows], \"cursor\": cursor})\n        if method == \"GET\" and path == \"/sessions\":\n            rows, cursor = scan_prefix(\"SESSION#\", 150, (event.get(\"queryStringParameters\") or {}).get(\"cursor\"))\n            return send(200, {\"items\": [x[\"session\"] for x in rows if x.get(\"session\")],\n                              \"cursor\": cursor})\n        if method == \"GET\" and path.startswith(\"/sessions/\"):\n            identifier = params.get(\"id\") or path.removeprefix(\"/sessions/\")\n            if not SESSION_ID.fullmatch(identifier):\n                raise ValueError(\"Código inválido\")\n            row = table.get_item(Key={\"id\": \"SESSION#\" + identifier}).get(\"Item\")\n            return send(200, row[\"session\"]) if row and \"session\" in row else send(404, {\"message\": \"Sesión no encontrada\"})\n        uid, admin, claims = user_claims(event)\n        if method == \"GET\" and path == \"/profile\":\n            return send(200, profile_response(uid, claims))\n        if method == \"PUT\" and path == \"/profile\":\n            name = clean_name(event_body(event).get(\"displayName\"))\n            table.put_item(Item={\"id\": \"USER#\" + uid, \"ownerSub\": uid, \"name\": name, \"updatedAt\": utc_now()})\n            return send(200, {\"userId\": uid, \"displayName\": name})\n        name = profile_name(uid, claims)\n        if method == \"POST\" and path == \"/songs/batch\":\n            originals = event_body(event).get(\"songs\", [])\n            if not isinstance(originals, list) or not 1 <= len(originals) <= 20:\n                raise ValueError(\"Carga entre 1 y 20 canciones\")\n            # Only user-generated IDs can be submitted in bulk; existing catalog stays protected.\n            if any(not str(s.get(\"id\", \"\")).startswith(\"usr-\") for s in originals):\n                raise ValueError(\"El lote debe contener nuevas canciones\")\n            created = [save_song(s, str(s[\"id\"]), uid, admin, name) for s in originals]\n            return send(200, {\"ok\": True, \"count\": len(created), \"songs\": created})\n        if method == \"PUT\" and path.startswith(\"/songs/\"):\n            identifier = params.get(\"id\") or path.removeprefix(\"/songs/\")\n            song = save_song(event_body(event), identifier, uid, admin, name)\n            return send(200, {\"ok\": True, \"song\": song})\n        if method == \"DELETE\" and path.startswith(\"/songs/\"):\n            identifier = params.get(\"id\") or path.removeprefix(\"/songs/\")\n            delete_song(identifier, uid, admin, name)\n            return send(200, {\"ok\": True, \"id\": identifier})\n        if method == \"POST\" and path == \"/sessions\":\n            session = save_session(event_body(event), uid, name)\n            return send(201, {\"session\": session})\n        if method == \"PUT\" and path.startswith(\"/sessions/\"):\n            identifier = params.get(\"id\") or path.removeprefix(\"/sessions/\")\n            session = save_session(event_body(event), uid, name, identifier)\n            return send(200, {\"session\": session})\n        return send(404, {\"message\": \"Ruta no encontrada\"})\n    except PermissionError as ex:\n        return send(403, {\"message\": str(ex)})\n    except (ValueError, TypeError, json.JSONDecodeError) as ex:\n        return send(400, {\"message\": str(ex)})\n    except ClientError as ex:\n        if ex.response.get(\"Error\", {}).get(\"Code\") in (\"ConditionalCheckFailedException\", \"TransactionCanceledException\"):\n            return send(403, {\"message\": \"No puedes modificar un elemento de otro usuario\"})\n        return send(500, {\"message\": \"Error del almacenamiento de BoscoSong\"})\n    except Exception:\n        return send(500, {\"message\": \"Error del servidor de BoscoSong\"})\n"
         },
         "Environment": {
           "Variables": {
@@ -348,6 +348,142 @@
         "Principal": "apigateway.amazonaws.com",
         "SourceArn": {
           "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/*"
+        }
+      }
+    },
+    "ListSessions": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "GET /sessions",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "ReadSession": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "GET /sessions/{id}",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "NewSession": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "POST /sessions",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
+        }
+      }
+    },
+    "UpdateSession": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "PUT /sessions/{id}",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
+        }
+      }
+    },
+    "ReadProfile": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "GET /profile",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
+        }
+      }
+    },
+    "UpdateProfile": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "PUT /profile",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "Integration"
+              }
+            ]
+          ]
+        },
+        "AuthorizationType": "JWT",
+        "AuthorizerId": {
+          "Ref": "Auth"
         }
       }
     }
