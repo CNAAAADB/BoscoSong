@@ -211,6 +211,15 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
   const next=Math.min(240,Math.max(40,bpm));
   setTempo(next);scheduleSessionSetting({tempo:next});
  }
+ async function persistFromPicker(session){
+  if(session?.id&&sessionSavePendingRef.current?.id===session.id){
+   clearTimeout(sessionSaveTimerRef.current);
+   sessionSavePendingRef.current=null;
+  }
+  const task=sessionSaveQueueRef.current.catch(()=>{}).then(()=>saveSession(cloudConfig,session));
+  sessionSaveQueueRef.current=task;
+  return task;
+ }
  async function refreshSessions(){
   if(!cloudConfig)return;
   try{setSessions(await listSessions(cloudConfig));}catch(e){setError("No se pudieron actualizar las sesiones: "+e.message);}
@@ -359,6 +368,7 @@ function App(){const [songs,setSongs]=useState(initial);const [ready,setReady]=u
   onClose={()=>setShowSessionPicker(false)}
   onLogin={()=>authForCurrentSong(false)}
   onSignup={()=>authForCurrentSong(true)}
+  onPersistSession={persistFromPicker}
   onSaved={stored=>setSessions(previous=>[stored,...previous.filter(x=>x.id!==stored.id)])}
   onViewSession={id=>{setShowSessionPicker(false);setSessionFocusId(id);setSessionContext(null);setTab("sessions");setPlaying(false);}}
  />}
