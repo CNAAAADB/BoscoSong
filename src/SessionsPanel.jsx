@@ -21,7 +21,7 @@ const cloneEntries=(session,songs)=>Array.isArray(session.songs)&&session.songs.
  :(session.songIds||[]).map(id=>rowSettings({songId:id},songs.find(s=>s.id===id)));
 const speedChoices=[0.02,0.05,0.1,0.2,0.35,0.5,0.75,1,1.5,2,3,5];
 
-export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,config,onRefresh,focusSessionId=null}){
+export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,config,onRefresh,onRequireUsername,focusSessionId=null}){
  const [selected,setSelected]=useState(null);
  const [draft,setDraft]=useState(null);
  const [search,setSearch]=useState("");
@@ -61,7 +61,7 @@ export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,c
  },[config]);
 
  const beginDraft=(source,modify=false)=>{
-  if(!auth){setMessage("Inicia sesión para crear sesiones");return;}
+  if(!auth){setMessage("Inicia sesión para crear sesiones");return;}if(!auth.username){onRequireUsername?.();return;}
   setMessage("");setSearch("");
   setDraft({
    id:modify?source.id:undefined,
@@ -80,7 +80,7 @@ export default function SessionsPanel({songs,sessions,onChange,onOpenSong,auth,c
   setDraft(d=>({...d,songs:next}));
  };
  const save=async()=>{
-  if(!auth||!config){setMessage("Inicia sesión para guardar una sesión");return;}
+  if(!auth||!config){setMessage("Inicia sesión para guardar una sesión");return;}if(!auth.username){onRequireUsername?.();return;}
   if(!draft.title.trim()||!draft.songs.length){setMessage("Escribe un nombre y añade al menos una canción");return;}
   setBusy(true);setMessage("");
   try{
