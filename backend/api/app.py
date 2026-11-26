@@ -151,9 +151,11 @@ def save_song(data, identifier, uid, admin, name):
     item = {"id": "SONG#" + identifier, "song": song, "ownerSub": owner_id,
             "ownerName": owner_name, "deleted": False, "updatedAt": utc_now()}
     # Atomic condition prevents two users racing to replace a fresh song.
-    table.put_item(Item=item,
-                   ConditionExpression="attribute_not_exists(id) OR ownerSub = :uid" if not admin else "attribute_exists(id) OR attribute_not_exists(id)",
-                   ExpressionAttributeValues={":uid": uid} if not admin else None)
+    kwargs = {"Item": item}
+    if not admin:
+        kwargs["ConditionExpression"] = "attribute_not_exists(id) OR ownerSub = :uid"
+        kwargs["ExpressionAttributeValues"] = {":uid": uid}
+    table.put_item(**kwargs)
     return song
 
 
@@ -166,12 +168,12 @@ def delete_song(identifier, uid, admin, name):
     if existing and existing.get("ownerSub") != uid and not admin:
         raise PermissionError("Solo el autor puede eliminar esta canción")
     owner_id = (existing or {}).get("ownerSub") or uid
-    table.put_item(
-        Item={"id": "SONG#" + identifier, "deleted": True, "ownerSub": owner_id,
-              "ownerName": (existing or {}).get("ownerName") or name, "updatedAt": utc_now()},
-        ConditionExpression="attribute_not_exists(id) OR ownerSub = :uid" if not admin else "attribute_exists(id) OR attribute_not_exists(id)",
-        ExpressionAttributeValues={":uid": uid} if not admin else None,
-    )
+    kwargs = {"Item": {"id": "SONG#" + identifier, "deleted": True, "ownerSub": owner_id,
+                       "ownerName": (existing or {}).get("ownerName") or name, "updatedAt": utc_now()}}
+    if not admin:
+        kwargs["ConditionExpression"] = "ownerSub = :uid"
+        kwargs["ExpressionAttributeValues"] = {":uid": uid}
+    table.put_item(**kwargs)
 
 
 def scan_prefix(prefix, limit=150, cursor=None):
@@ -241,8 +243,10 @@ def save_session(data, uid, name, identifier=None):
     if not SESSION_ID.fullmatch(session["id"]):
         raise ValueError("Código inválido")
     item = {"id": "SESSION#" + session["id"], "ownerSub": session["ownerSub"], "session": session}
-    table.put_item(Item=item, ConditionExpression="attribute_not_exists(id)" if not identifier else "ownerSub = :uid",
-                   ExpressionAttributeValues=None if not identifier else {":uid": uid})
+    kwargs = {"Item": item, "ConditionExpression": "attribute_not_exists(id)" if not identifier else "ownerSub = :uid"}
+    if identifier:
+        kwargs["ExpressionAttributeValues"] = {":uid": uid}
+    table.put_item(**kwargs)
     return session
 
 
@@ -252,7 +256,7 @@ def handler(event, context):
     params = event.get("pathParameters") or {}
     try:
         if method == "GET" and path == "/changes":
-            rows, cursor = scan_prefix("SONG#")
+            rows, cursor = scan_prefix("SONG#", 150, (event.get("queryStringParameters") or {}).get("cursor"))
             return send(200, {"items": [{"id": x["id"][5:], "deleted": x.get("deleted", False),
                                        **({"song": x["song"]} if x.get("song") else {})}
                                       for x in rows], "cursor": cursor})
