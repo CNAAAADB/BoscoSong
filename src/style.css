@@ -444,3 +444,69 @@ button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
  min-width:0;
  max-width:100%;
 }
+
+
+/* Shared sessions and per-account ownership */
+.authControls .authProfile{
+ background:transparent;
+ color:#252b57;
+ font-size:11px;
+ font-weight:700;
+ border:1px solid #e6d7aa;
+ border-radius:9px;
+ padding:8px 10px;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+ max-width:175px;
+}
+.authControls .authProfile:hover{background:#f4ebd3}
+.sessionNavigation{
+ display:flex;
+ align-items:center;
+ gap:7px;
+ min-width:0;
+ padding:6px 13px;
+ border-bottom:1px solid #e6d7aa;
+ background:#f6f0e1;
+ flex:0 0 auto;
+}
+.sessionNavigation>button,
+.presentationSessionNav button{
+ flex:none;display:grid;place-items:center;
+ height:29px;min-width:29px;padding:4px 7px;
+ border:1px solid #e6d7aa;border-radius:7px;
+ background:#fffaf0;color:#252b57;
+}
+.sessionNavigation .sessionBack{display:flex;gap:4px;font-size:11px}
+.sessionNavigationName{flex:1 1 auto;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sessionNavigationName>strong{font-size:12px}
+.sessionNavigationName>span{color:#666b80}
+.sessionNavigation button:disabled,
+.presentationSessionNav button:disabled{opacity:.3;cursor:not-allowed}
+.presentationSessionNav{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+.presentationSessionNav span{font-size:11px;white-space:nowrap;color:#252b57}
+.sessionEditEntry{padding:9px 0 11px;border-bottom:1px solid #e6d7aa}
+.sessionEditEntry .sessionRow{padding:5px 0 9px;border:0}
+.sessionEntrySettings{display:flex;gap:9px;flex-wrap:wrap;align-items:end}
+.sessionEntrySettings label{flex:1 1 100px;display:flex;flex-direction:column;gap:5px;color:#555b77;font-size:11px;font-weight:700}
+.sessionEntrySettings label>span{display:flex;align-items:center;gap:4px}
+.sessionEntrySettings label>span strong{flex:1;text-align:center;white-space:nowrap;font-size:11px}
+.sessionEntrySettings label>span button{width:27px;height:29px;border-radius:6px;background:#fffaf0;color:#252b57;border:1px solid #e6d7aa}
+.sessionEntrySettings select,.sessionEntrySettings input{width:100%;min-width:50px;height:33px;padding:5px 8px;background:#fffaf0;color:#252b57;border:1px solid #e6d7aa;border-radius:7px;font-size:12px}
+@media(max-width:700px){
+ .authControls .authProfile{max-width:85px;padding:6px;font-size:9px}
+ .authControls{max-width:170px}
+ .authControls .primary,.authControls .subtle{padding:6px 5px;font-size:9px}
+ .sessionNavigation{padding:5px 8px;gap:4px;min-height:35px}
+ .sessionNavigationName{font-size:9px}
+ .sessionNavigationName>strong{font-size:10px}
+ .sessionNavigationName>span{display:none}
+ .sessionNavigation .sessionBack{font-size:0;padding:5px;width:29px;min-width:29px}
+ .sessionNavigation .sessionBack svg{width:17px;height:17px}
+ .sessionEntrySettings{gap:5px}
+ .presentationSessionNav{gap:2px}
+ .presentationSessionNav button{min-width:26px;width:26px;height:30px;padding:3px}
+ .presentationSessionNav span{font-size:9px}
+ .reader.presentationMode .presentationControls:has(.presentationSessionNav){gap:3px}
+}
