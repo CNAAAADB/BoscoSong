@@ -592,3 +592,48 @@ button:disabled,.importDisabled{filter:grayscale(.25);opacity:.52}
  .sessionPickerNewRow .primary{padding:10px}
  .readerHead .actions .addToSessionButton{background:#252b57;color:#fff;border-color:#252b57}
 }
+
+
+/* First sign-in: reserve one globally unique author handle. */
+.usernameBackdrop{
+ position:fixed;inset:0;z-index:30000;
+ display:flex;align-items:center;justify-content:center;padding:16px;
+ background:rgba(19,23,49,.74);
+ backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
+}
+.usernameDialog{
+ width:min(100%,465px);max-height:calc(100dvh - 28px);overflow-y:auto;
+ padding:29px 31px 24px;background:#fffdf8;color:#252b57;
+ border:1px solid #d0a73f;border-radius:20px;
+ box-shadow:0 30px 80px rgba(17,22,52,.35);
+}
+.usernameDialogHeader{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.usernameAvatar{display:grid;place-items:center;width:50px;height:50px;border-radius:15px;background:#252b57;color:#e6d7aa}
+.usernameClose{display:grid;place-items:center;border:1px solid #e6d7aa;background:#fffaf0;color:#252b57;border-radius:9px;width:36px;height:36px}
+.usernameDialog .eyebrow{font-size:10px;font-weight:800;letter-spacing:.09em;color:#9e7921}
+.usernameDialog h2{font-size:clamp(23px,4vw,28px);line-height:1.18;letter-spacing:-.05em;margin:8px 0 12px}
+.usernameDialog>p{font-size:13px;line-height:1.65;color:#626b7d;margin:0 0 22px}
+.usernameDialog form{display:flex;flex-direction:column;gap:10px}
+.usernameDialog form>label{font-size:12px;font-weight:750}
+.usernameInputGroup{display:flex;align-items:stretch;background:#fff;border:1px solid #d0a73f;border-radius:11px;min-height:48px;overflow:hidden}
+.usernameInputGroup:focus-within{outline:2px solid #d0a73f;outline-offset:2px}
+.usernameInputGroup>span{display:grid;place-items:center;background:#f6edd5;color:#252b57;font-size:17px;font-weight:800;width:46px;flex:none}
+.usernameInputGroup input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:11px 13px;color:#252b57;font-size:16px;font-weight:650;letter-spacing:.01em}
+.usernameInputGroup input::placeholder{font-size:14px;color:#848896;font-weight:450}
+.usernameHint{min-height:18px;font-size:11px;color:#596077;line-height:1.5;margin:0}
+.usernameHintError{color:#9e4231}
+.usernameError{font-size:12px;line-height:1.5;color:#9e4231;background:#fff0e9;border:1px solid #f5cec0;padding:11px 12px;border-radius:9px;margin:0}
+.usernameExample{display:flex;align-items:flex-start;gap:9px;background:#f5eedc;border:1px solid #eadcbb;border-radius:10px;padding:12px;font-size:12px;line-height:1.5}
+.usernameExample svg{flex:none;color:#8d7428}
+.usernamePermanent{display:flex;gap:8px;align-items:flex-start;color:#676d7d;font-size:11px;line-height:1.55;margin:3px 0 0}
+.usernamePermanent svg{flex:none;color:#a78735;margin-top:1px}
+.usernameSubmit{margin-top:9px;justify-content:center;width:100%;min-height:46px}
+.usernameLater{border:0;background:transparent;color:#6b6f83;width:100%;text-align:center;font-size:11px;margin-top:13px;padding:8px}
+.usernameLater:hover{text-decoration:underline;color:#252b57}
+@media(max-width:650px){
+ .usernameBackdrop{padding:10px}
+ .usernameDialog{border-radius:16px;padding:22px 18px 15px;max-height:calc(100dvh - 20px)}
+ .usernameDialogHeader{margin-bottom:16px}
+ .usernameAvatar{height:43px;width:43px}
+ .usernameDialog>p{margin-bottom:16px}
+}
